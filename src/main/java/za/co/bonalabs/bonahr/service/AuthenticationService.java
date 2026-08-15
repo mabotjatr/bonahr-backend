@@ -1,7 +1,6 @@
 package za.co.bonalabs.bonahr.service;
 
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Service;
@@ -11,6 +10,7 @@ import za.co.bonalabs.bonahr.entity.Role;
 import za.co.bonalabs.bonahr.entity.User;
 import za.co.bonalabs.bonahr.exception.InvalidCredentialsException;
 import za.co.bonalabs.bonahr.repository.UserRepository;
+import za.co.bonalabs.bonahr.security.JwtService;
 
 import java.util.List;
 
@@ -19,10 +19,15 @@ public class AuthenticationService {
 
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
+    private final JwtService jwtService;
 
-    public AuthenticationService(AuthenticationManager authenticationManager, UserRepository userRepository) {
+    public AuthenticationService(
+            AuthenticationManager authenticationManager ,
+            UserRepository userRepository,
+            JwtService jwtService) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
+        this.jwtService = jwtService;
     }
 
     public LoginResponse login(LoginRequest request) {
@@ -43,9 +48,18 @@ public class AuthenticationService {
         List<String> roles = user.getRoles()
                 .stream()
                 .map(Role::getName)
+                .sorted()
                 .toList();
 
+        String accessToken = jwtService.generateToken(
+                user.getId(),
+                user.getOrganisation().getId(),
+                roles
+        );
+
         return new LoginResponse(
+                accessToken,
+                "Bearer",
                 user.getId(),
                 user.getOrganisation().getId(),
                 user.getEmail(),

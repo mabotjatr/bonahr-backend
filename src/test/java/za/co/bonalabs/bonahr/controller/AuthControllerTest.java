@@ -90,24 +90,19 @@ class AuthControllerTest {
                 "SecretPassword123!"
         );
 
-        mockMvc.perform(
-                        post("/api/v1/auth/login")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request))
-                )
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").value(
-                        activeUser.getId().toString()
-                ))
-                .andExpect(jsonPath("$.organisationId").value(
-                        activeUser.getOrganisation().getId().toString()
-                ))
-                .andExpect(jsonPath("$.email").value(
-                        "john@example.com"
-                ))
-                .andExpect(jsonPath("$.roles[0]").value(
-                        "HR_ADMIN"
-                ));
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.userId").isNotEmpty())
+                .andExpect(jsonPath("$.organisationId")
+                        .value(activeUser.getOrganisation().getId().toString()))
+                .andExpect(jsonPath("$.email")
+                        .value("john@example.com"))
+                .andExpect(jsonPath("$.roles[0]")
+                        .value("HR_ADMIN"));
     }
 
     @Test
