@@ -18,4 +18,9 @@ public class GlobalExceptionHandler {
 
     public record ErrorResponse(String code, String message, OffsetDateTime timestamp) {
     }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public void handleInvalidCredentials() {
+    }
 }
