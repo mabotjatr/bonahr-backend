@@ -7,6 +7,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import za.co.bonalabs.bonahr.entity.Organisation;
+import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 import za.co.bonalabs.bonahr.security.JwtService;
 
 import java.util.List;
@@ -32,11 +34,31 @@ class OrganisationControllerTest {
     @Autowired
     private JwtService jwtService;
 
-    private String createAccessToken(UUID organisationId) {
+    @Autowired
+    private OrganisationRepository organisationRepository;
+
+    private Organisation createTestOrganisation(String name) {
+
+        Organisation organisation = new Organisation(name);
+
+        organisation.setLegalName(name + " Pty Ltd");
+        organisation.setEmail(
+                UUID.randomUUID() + "@example.com"
+        );
+
+        return organisationRepository.saveAndFlush(organisation);
+    }
+
+    private String createAccessToken(UUID organisationId, List<String> roles) {
         return jwtService.generateToken(
                 TEST_USER_ID,
                 organisationId,
-                List.of("HR_ADMIN")
+                roles
+        );
+    }
+
+    private String createAccessToken(UUID organisationId) {
+        return createAccessToken(organisationId, List.of("HR_ADMIN")
         );
     }
 
@@ -45,128 +67,68 @@ class OrganisationControllerTest {
     }
 
     @Test
-    void shouldCreateOrganisation() throws Exception {
-
-        String uniqueValue = UUID.randomUUID().toString();
-
-        String request = """
-                {
-                    "name": "Test Company",
-                    "legalName": "Test Company Pty Ltd",
-                    "registrationNumber": "TEST-%s",
-                    "taxNumber": "TAX-%s",
-                    "email": "test@example.com",
-                    "phone": "+27 11 123 4567",
-                    "website": "https://example.com"
-                }
-                """.formatted(uniqueValue, uniqueValue);
-
-        mockMvc.perform(post("/api/v1/organisations")
-                        .header(
-                                "Authorization",
-                                "Bearer " + createAccessToken()
-                        )
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(request))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").isNotEmpty())
-                .andExpect(jsonPath("$.name").value("Test Company"))
-                .andExpect(jsonPath("$.legalName")
-                        .value("Test Company Pty Ltd"))
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
-    }
-
-    @Test
-    void shouldRejectOrganisationWithoutName() throws Exception {
+    void shouldReturnForbiddenWhenHrAdminCreatesOrganisation()
+            throws Exception {
 
         String request = """
-                {
-                    "name": "",
-                    "legalName": "Test Company Pty Ltd",
-                    "email": "test@example.com"
-                }
-                """;
+            {
+                "name": "Test Company",
+                "legalName": "Test Company Pty Ltd",
+                "email": "test@example.com"
+            }
+            """;
 
-        mockMvc.perform(post("/api/v1/organisations")
-                        .header(
-                                "Authorization",
-                                "Bearer " + createAccessToken()
-                        )
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(request))
-                .andExpect(status().isBadRequest());
+        mockMvc.perform(
+                        post("/api/v1/organisations")
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + createAccessToken()
+                                )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(request)
+                )
+                .andExpect(status().isForbidden());
     }
 
     @Test
     void shouldReturnOrganisationById() throws Exception {
 
-        String request = """
-                {
-                    "name": "Lookup Company",
-                    "legalName": "Lookup Company Pty Ltd",
-                    "email": "lookup@example.com"
-                }
-                """;
+        Organisation organisation = createTestOrganisation("Lookup Company");
 
-        String response = mockMvc.perform(post("/api/v1/organisations")
-                        .header(
-                                "Authorization",
-                                "Bearer " + createAccessToken()
-                        )
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(request))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+        String token = createAccessToken(organisation.getId());
 
-        String id = extractId(response);
-
-        String token = createAccessToken(UUID.fromString(id));
-
-        mockMvc.perform(get("/api/v1/organisations/" + id)
-                        .header(
-                                "Authorization",
-                                "Bearer " + token
-                        ))
+        mockMvc.perform(
+                        get("/api/v1/organisations/" + organisation.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + token
+                                )
+                )
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id))
-                .andExpect(jsonPath("$.name").value("Lookup Company"));
+                .andExpect(
+                        jsonPath("$.id")
+                                .value(organisation.getId().toString())
+                )
+                .andExpect(
+                        jsonPath("$.name")
+                                .value("Lookup Company")
+                );
     }
 
     @Test
     void shouldNotReturnOrganisationFromAnotherTenant() throws Exception {
 
-        String request = """
-                {
-                    "name": "Tenant B Company",
-                    "legalName": "Tenant B Company Pty Ltd",
-                    "email": "tenant-b@example.com"
-                }
-                """;
+        Organisation organisation = createTestOrganisation("Tenant B Company");
 
-        String response = mockMvc.perform(post("/api/v1/organisations")
-                        .header(
-                                "Authorization",
-                                "Bearer " + createAccessToken()
-                        )
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(request))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+        String otherTenantToken = createAccessToken(OTHER_ORGANISATION_ID);
 
-        String organisationId = extractId(response);
-
-        String otherTenantToken =
-                createAccessToken(OTHER_ORGANISATION_ID);
-
-        mockMvc.perform(get("/api/v1/organisations/" + organisationId)
-                        .header(
-                                "Authorization",
-                                "Bearer " + otherTenantToken
-                        ))
+        mockMvc.perform(
+                        get("/api/v1/organisations/" + organisation.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + otherTenantToken
+                                )
+                )
                 .andExpect(status().isNotFound());
     }
 
@@ -209,6 +171,80 @@ class OrganisationControllerTest {
                                 "Bearer invalid-token"
                         ))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldReturnForbiddenWhenEmployeeReadsOrganisationDetails() throws Exception {
+
+        Organisation organisation = createTestOrganisation("Role Test Company");
+
+        String employeeToken = createAccessToken(
+                organisation.getId(),
+                List.of("EMPLOYEE")
+        );
+
+        mockMvc.perform(
+                        get("/api/v1/organisations/" + organisation.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + employeeToken
+                                )
+                )
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldAllowOwnerToReadOrganisationDetails() throws Exception {
+
+        Organisation organisation = createTestOrganisation("Owner Test Company");
+
+        String ownerToken = createAccessToken(
+                organisation.getId(),
+                List.of("OWNER")
+        );
+
+        mockMvc.perform(
+                        get("/api/v1/organisations/" + organisation.getId())
+                                .header(
+                                        "Authorization",
+                                        "Bearer " + ownerToken
+                                )
+                )
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.id")
+                                .value(organisation.getId().toString())
+                )
+                .andExpect(
+                        jsonPath("$.name")
+                                .value("Owner Test Company")
+                );
+    }
+
+    @Test
+    void shouldReturnForbiddenWhenEmployeeCreatesOrganisation() throws Exception {
+
+        String employeeToken = createAccessToken(
+                TEST_ORGANISATION_ID,
+                List.of("EMPLOYEE")
+        );
+
+        String request = """
+                {
+                    "name": "Another Company",
+                    "legalName": "Another Company Pty Ltd",
+                    "email": "another@example.com"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/organisations")
+                        .header(
+                                "Authorization",
+                                "Bearer " + employeeToken
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isForbidden());
     }
 
     private String extractId(String response) {

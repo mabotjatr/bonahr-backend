@@ -3,10 +3,10 @@ package za.co.bonalabs.bonahr.security;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpMethod;
 
 @Configuration
 public class SecurityConfig {
@@ -25,11 +25,17 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
 
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/api/v1/auth/login",
-                                "/api/v1/health"
-                        ).permitAll()
-                        .anyRequest().authenticated()
+                        .requestMatchers("/api/v1/auth/login","/api/v1/health")
+                        .permitAll()
+
+                        .requestMatchers( HttpMethod.POST,"/api/v1/organisations")
+                        .denyAll()
+
+                        .requestMatchers(HttpMethod.GET,"/api/v1/organisations/**")
+                        .hasAnyRole("OWNER","HR_ADMIN")
+
+                        .anyRequest()
+                        .authenticated()
                 )
 
                 .exceptionHandling(exception -> exception
