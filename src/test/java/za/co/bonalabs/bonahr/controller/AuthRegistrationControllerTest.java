@@ -370,4 +370,36 @@ class AuthRegistrationControllerTest {
                 .andExpect(jsonPath("$.email").value(ownerEmail))
                 .andExpect(jsonPath("$.roles[0]").value("OWNER"));
     }
+
+    @Test
+    void shouldRejectRegistrationWithWeakPassword() throws Exception {
+
+        String uniqueValue = UUID.randomUUID().toString();
+
+        String request = """
+                {
+                    "organisationName": "Weak Password Company",
+                    "legalName": "Weak Password Company Pty Ltd",
+                    "registrationNumber": "REG-%s",
+                    "taxNumber": "TAX-%s",
+                    "organisationEmail": "company-%s@example.com",
+                    "firstName": "Test",
+                    "lastName": "Owner",
+                    "email": "owner-%s@example.com",
+                    "password": "short"
+                }
+                """.formatted(
+                uniqueValue,
+                uniqueValue,
+                uniqueValue,
+                uniqueValue
+        );
+
+        mockMvc.perform(
+                        post("/api/v1/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(request)
+                )
+                .andExpect(status().isBadRequest());
+    }
 }
