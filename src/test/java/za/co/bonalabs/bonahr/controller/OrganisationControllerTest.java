@@ -24,6 +24,7 @@ class OrganisationControllerTest {
 
     private static final UUID TEST_USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID TEST_ORGANISATION_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID OTHER_ORGANISATION_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
 
     @Autowired
     private MockMvc mockMvc;
@@ -31,12 +32,16 @@ class OrganisationControllerTest {
     @Autowired
     private JwtService jwtService;
 
-    private String createAccessToken() {
+    private String createAccessToken(UUID organisationId) {
         return jwtService.generateToken(
                 TEST_USER_ID,
-                TEST_ORGANISATION_ID,
+                organisationId,
                 List.of("HR_ADMIN")
         );
+    }
+
+    private String createAccessToken() {
+        return createAccessToken(TEST_ORGANISATION_ID);
     }
 
     @Test
@@ -117,14 +122,52 @@ class OrganisationControllerTest {
 
         String id = extractId(response);
 
+        String token = createAccessToken(UUID.fromString(id));
+
         mockMvc.perform(get("/api/v1/organisations/" + id)
                         .header(
                                 "Authorization",
-                                "Bearer " + createAccessToken()
+                                "Bearer " + token
                         ))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.name").value("Lookup Company"));
+    }
+
+    @Test
+    void shouldNotReturnOrganisationFromAnotherTenant() throws Exception {
+
+        String request = """
+                {
+                    "name": "Tenant B Company",
+                    "legalName": "Tenant B Company Pty Ltd",
+                    "email": "tenant-b@example.com"
+                }
+                """;
+
+        String response = mockMvc.perform(post("/api/v1/organisations")
+                        .header(
+                                "Authorization",
+                                "Bearer " + createAccessToken()
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String organisationId = extractId(response);
+
+        String otherTenantToken =
+                createAccessToken(OTHER_ORGANISATION_ID);
+
+        mockMvc.perform(get("/api/v1/organisations/" + organisationId)
+                        .header(
+                                "Authorization",
+                                "Bearer " + otherTenantToken
+                        ))
+                .andExpect(status().isNotFound());
     }
 
     @Test
