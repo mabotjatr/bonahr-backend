@@ -1,5 +1,6 @@
 package za.co.bonalabs.bonahr.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -39,6 +40,9 @@ class AuthRegistrationControllerTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Test
     void shouldRegisterOrganisationAndOwner() throws Exception {
@@ -297,5 +301,73 @@ class AuthRegistrationControllerTest {
                                 .content(secondRequest)
                 )
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void shouldAllowRegisteredOwnerToLogin() throws Exception {
+
+        String uniqueValue = UUID.randomUUID().toString();
+        String ownerEmail = "login-owner-" + uniqueValue + "@example.com";
+        String password = "SecurePassword123!";
+
+        String registrationRequest = """
+                {
+                    "organisationName": "Login Test Company",
+                    "legalName": "Login Test Company Pty Ltd",
+                    "registrationNumber": "REG-%s",
+                    "taxNumber": "TAX-%s",
+                    "organisationEmail": "company-%s@example.com",
+                    "firstName": "Login",
+                    "lastName": "Owner",
+                    "email": "%s",
+                    "password": "%s"
+                }
+                """.formatted(
+                uniqueValue,
+                uniqueValue,
+                uniqueValue,
+                ownerEmail,
+                password
+        );
+
+        String registrationResponse =
+                mockMvc.perform(
+                                post("/api/v1/auth/register")
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(registrationRequest)
+                        )
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        String organisationId =
+                objectMapper
+                        .readTree(registrationResponse)
+                        .get("organisationId")
+                        .asText();
+
+        String loginRequest = """
+                {
+                    "organisationId": "%s",
+                    "email": "%s",
+                    "password": "%s"
+                }
+                """.formatted(
+                organisationId,
+                ownerEmail,
+                password
+        );
+
+        mockMvc.perform(
+                        post("/api/v1/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(loginRequest)
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.organisationId").value(organisationId))
+                .andExpect(jsonPath("$.email").value(ownerEmail))
+                .andExpect(jsonPath("$.roles[0]").value("OWNER"));
     }
 }
