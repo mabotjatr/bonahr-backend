@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import za.co.bonalabs.bonahr.dto.employee.CreateEmployeeRequest;
 import za.co.bonalabs.bonahr.dto.employee.EmployeeMapper;
 import za.co.bonalabs.bonahr.dto.employee.EmployeeResponse;
+import za.co.bonalabs.bonahr.dto.employee.UpdateEmployeeRequest;
 import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.security.JwtAuthenticationDetails;
 import za.co.bonalabs.bonahr.service.EmployeeService;
@@ -57,5 +58,15 @@ public class EmployeeController {
         List<EmployeeResponse> employees = employeeService.getEmployees(details.organisationId()).stream().map(EmployeeMapper::toResponse).toList();
 
         return ResponseEntity.ok(employees);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<EmployeeResponse> updateEmployee(@PathVariable UUID id, @Valid @RequestBody UpdateEmployeeRequest request, Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        Employee employee = employeeService.updateEmployee(details.organisationId(), id, request);
+
+        return ResponseEntity.ok(EmployeeMapper.toResponse(employee));
     }
 }

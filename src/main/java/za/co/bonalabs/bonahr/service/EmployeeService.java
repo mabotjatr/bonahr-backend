@@ -3,6 +3,7 @@ package za.co.bonalabs.bonahr.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.dto.employee.CreateEmployeeRequest;
+import za.co.bonalabs.bonahr.dto.employee.UpdateEmployeeRequest;
 import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.exception.DuplicateResourceException;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
@@ -55,5 +56,23 @@ public class EmployeeService {
     public List<Employee> getEmployees(UUID organisationId) {
         return employeeRepository
                 .findAllByOrganisationIdOrderByLastNameAscFirstNameAsc( organisationId);
+    }
+
+    public Employee updateEmployee(UUID organisationId, UUID employeeId, UpdateEmployeeRequest request) {
+
+        Employee employee = getEmployee(organisationId, employeeId);
+
+        if (request.email() != null && !request.email().isBlank()
+                && !request.email().equalsIgnoreCase(employee.getEmail())
+                && employeeRepository.existsByOrganisationIdAndEmailIgnoreCase(organisationId, request.email())) {
+
+            throw new DuplicateResourceException("Employee email already exists: " + request.email());
+        }
+
+        employee.setFirstName(request.firstName());
+        employee.setLastName(request.lastName());
+        employee.setEmail(request.email());
+
+        return employeeRepository.saveAndFlush(employee);
     }
 }

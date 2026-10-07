@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -279,5 +280,140 @@ class EmployeeControllerTest {
         String token = createAccessToken(organisation.getId(), List.of("EMPLOYEE"));
 
         mockMvc.perform(get("/api/v1/employees").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldUpdateEmployeeForAuthenticatedOrganisation() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Update API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee.setEmail("john-" + UUID.randomUUID() + "@example.com");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        String updatedEmail = "updated-" + UUID.randomUUID() + "@example.com";
+
+        String request = """
+                {
+                    "firstName": "Johnny",
+                    "lastName": "Smith",
+                    "email": "%s"
+                }
+                """.formatted(updatedEmail);
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(put("/api/v1/employees/" + employee.getId())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(employee.getId().toString()))
+                .andExpect(jsonPath("$.firstName").value("Johnny"))
+                .andExpect(jsonPath("$.lastName").value("Smith"))
+                .andExpect(jsonPath("$.email").value(updatedEmail))
+                .andExpect(jsonPath("$.employeeNumber").value(employee.getEmployeeNumber()))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    void shouldReturnForbiddenWhenEmployeeRoleUpdatesEmployee() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Update Role Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        String request = """
+                {
+                    "firstName": "Johnny",
+                    "lastName": "Smith",
+                    "email": "johnny@example.com"
+                }
+                """;
+
+        String token = createAccessToken(organisation.getId(), List.of("EMPLOYEE"));
+
+        mockMvc.perform(put("/api/v1/employees/" + employee.getId())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldNotUpdateEmployeeFromAnotherOrganisation() throws Exception {
+
+        Organisation organisationA = new Organisation("Employee Update Tenant A " + UUID.randomUUID());
+
+        Organisation organisationB = new Organisation("Employee Update Tenant B " + UUID.randomUUID());
+
+        organisationA = organisationRepository.saveAndFlush(organisationA);
+
+        organisationB = organisationRepository.saveAndFlush(organisationB);
+
+        Employee employee = new Employee(organisationA, "EMP-" + UUID.randomUUID(), "Original", "Employee");
+
+        employee.setEmail("original-" + UUID.randomUUID() + "@example.com");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        String request = """
+                {
+                    "firstName": "Changed",
+                    "lastName": "Employee",
+                    "email": "changed@example.com"
+                }
+                """;
+
+        String token = createAccessToken(organisationB.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(put("/api/v1/employees/" + employee.getId())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldReturnConflictWhenUpdatingEmployeeToDuplicateEmail() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Duplicate Update Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        String firstEmail = "first-" + UUID.randomUUID() + "@example.com";
+
+        String secondEmail = "second-" + UUID.randomUUID() + "@example.com";
+
+        Employee firstEmployee = new Employee(organisation, "EMP-001-" + UUID.randomUUID(), "First", "Employee");
+
+        firstEmployee.setEmail(firstEmail);
+
+        employeeRepository.saveAndFlush(firstEmployee);
+
+        Employee secondEmployee = new Employee(organisation, "EMP-002-" + UUID.randomUUID(), "Second", "Employee");
+
+        secondEmployee.setEmail(secondEmail);
+
+        secondEmployee = employeeRepository.saveAndFlush(secondEmployee);
+
+        String request = """
+                {
+                    "firstName": "Second",
+                    "lastName": "Employee",
+                    "email": "%s"
+                }
+                """.formatted(firstEmail.toUpperCase());
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(put("/api/v1/employees/" + secondEmployee.getId())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isConflict());
     }
 }

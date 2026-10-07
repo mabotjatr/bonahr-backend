@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.dto.employee.CreateEmployeeRequest;
+import za.co.bonalabs.bonahr.dto.employee.UpdateEmployeeRequest;
 import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.entity.EmployeeStatus;
 import za.co.bonalabs.bonahr.entity.Organisation;
@@ -216,5 +217,87 @@ class EmployeeServiceTest {
         assertEquals("Adams", employees.get(0).getLastName());
 
         assertEquals("Zulu", employees.get(1).getLastName());
+    }
+
+    @Test
+    void shouldUpdateEmployeeWithinOrganisation() {
+
+        Organisation organisation = new Organisation("Employee Update Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        CreateEmployeeRequest createRequest = new CreateEmployeeRequest(
+                "EMP-" + UUID.randomUUID(), "John", "Doe", "john-" + UUID.randomUUID() + "@example.com");
+
+        Employee employee = employeeService.createEmployee(organisation.getId(), createRequest);
+
+        String updatedEmail = "updated-" + UUID.randomUUID() + "@example.com";
+
+        UpdateEmployeeRequest updateRequest = new UpdateEmployeeRequest("Johnny", "Smith", updatedEmail);
+
+        Employee updatedEmployee = employeeService.updateEmployee(organisation.getId(), employee.getId(), updateRequest);
+
+        assertEquals(employee.getId(), updatedEmployee.getId());
+
+        assertEquals(organisation.getId(), updatedEmployee.getOrganisation().getId());
+
+        assertEquals("Johnny", updatedEmployee.getFirstName());
+
+        assertEquals("Smith", updatedEmployee.getLastName());
+
+        assertEquals(updatedEmail, updatedEmployee.getEmail());
+
+        // Employee number must remain unchanged.
+        assertEquals(createRequest.employeeNumber(), updatedEmployee.getEmployeeNumber());
+
+        // Normal profile editing must not change employment status.
+        assertEquals(EmployeeStatus.ACTIVE, updatedEmployee.getStatus());
+    }
+
+    @Test
+    void shouldNotUpdateEmployeeFromAnotherOrganisation() {
+
+        Organisation organisationA = new Organisation("Employee Update Tenant A " + UUID.randomUUID());
+
+        Organisation organisationB = new Organisation("Employee Update Tenant B " + UUID.randomUUID());
+
+        organisationA = organisationRepository.saveAndFlush(organisationA);
+
+        organisationB = organisationRepository.saveAndFlush(organisationB);
+
+        Employee employee = employeeService.createEmployee(organisationA.getId(), new CreateEmployeeRequest(
+                "EMP-" + UUID.randomUUID(), "Original", "Employee", "original-" + UUID.randomUUID() + "@example.com"));
+
+        UpdateEmployeeRequest updateRequest = new UpdateEmployeeRequest(
+                "Changed", "Employee", "changed-" + UUID.randomUUID() + "@example.com");
+
+        Organisation finalOrganisationB = organisationB;
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () ->
+                employeeService.updateEmployee(finalOrganisationB.getId(), employee.getId(), updateRequest));
+
+        assertEquals("Employee not found: " + employee.getId(), exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectDuplicateEmployeeEmailDuringUpdate() {
+
+        Organisation organisation = new Organisation("Employee Update Email Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        String firstEmail = "first-" + UUID.randomUUID() + "@example.com";
+
+        String secondEmail = "second-" + UUID.randomUUID() + "@example.com";
+
+        employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-001-" + UUID.randomUUID(), "First", "Employee", firstEmail));
+
+        Employee secondEmployee = employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-002-" + UUID.randomUUID(), "Second", "Employee", secondEmail));
+
+        UpdateEmployeeRequest updateRequest = new UpdateEmployeeRequest(secondEmployee.getFirstName(), secondEmployee.getLastName(), firstEmail.toUpperCase());
+
+        Organisation finalOrganisation = organisation;
+        assertThrows(DuplicateResourceException.class, () -> employeeService.updateEmployee(finalOrganisation.getId(), secondEmployee.getId(), updateRequest));
     }
 }
