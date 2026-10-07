@@ -16,6 +16,11 @@ public final class EmployeeMapper {
                 employee.getFirstName(),
                 employee.getLastName(),
                 employee.getEmail(),
+                employee.getJobTitle(),
+                employee.getDepartment(),
+                employee.getEmploymentType(),
+                employee.getStartDate(),
+                employee.getPhone(),
                 employee.getStatus(),
                 employee.getCreatedAt(),
                 employee.getUpdatedAt()

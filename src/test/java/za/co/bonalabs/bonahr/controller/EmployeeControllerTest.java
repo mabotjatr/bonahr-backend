@@ -7,12 +7,14 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import za.co.bonalabs.bonahr.entity.EmploymentType;
 import za.co.bonalabs.bonahr.entity.Organisation;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 import za.co.bonalabs.bonahr.security.JwtService;
 import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.repository.EmployeeRepository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -488,5 +490,113 @@ class EmployeeControllerTest {
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON).content(request))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldReturnUpdatedEmploymentDetails() throws Exception {
+
+        Organisation organisation = new Organisation("Employment Details API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee.setEmail("john-" + UUID.randomUUID() + "@example.com");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        String request = """
+                {
+                    "firstName": "John",
+                    "lastName": "Doe",
+                    "email": "%s",
+                    "jobTitle": "Senior Software Engineer",
+                    "department": "Engineering",
+                    "employmentType": "PERMANENT",
+                    "startDate": "2026-10-01",
+                    "phone": "+27 82 123 4567"
+                }
+                """.formatted(employee.getEmail());
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(put("/api/v1/employees/" + employee.getId())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.jobTitle").value("Senior Software Engineer"))
+                .andExpect(jsonPath("$.department").value("Engineering"))
+                .andExpect(jsonPath("$.employmentType").value("PERMANENT"))
+                .andExpect(jsonPath("$.startDate").value("2026-10-01"))
+                .andExpect(jsonPath("$.phone").value("+27 82 123 4567"));
+    }
+
+    @Test
+    void shouldReturnEmploymentDetailsWhenRetrievingEmployee() throws Exception {
+
+        Organisation organisation = new Organisation("Employment Read API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee.setEmail("john-" + UUID.randomUUID() + "@example.com");
+
+        employee.setJobTitle("Senior Software Engineer");
+        employee.setDepartment("Engineering");
+        employee.setEmploymentType(EmploymentType.PERMANENT);
+        employee.setStartDate(LocalDate.of(2026, 10, 1));
+        employee.setPhone("+27 82 123 4567");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/employees/" + employee.getId())
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.jobTitle").value("Senior Software Engineer"))
+                .andExpect(jsonPath("$.department").value("Engineering"))
+                .andExpect(jsonPath("$.employmentType").value("PERMANENT"))
+                .andExpect(jsonPath("$.startDate").value("2026-10-01"))
+                .andExpect(jsonPath("$.phone").value("+27 82 123 4567"));
+
+    }
+
+    @Test
+    void shouldCreateEmployeeWithEmploymentDetails() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Create Details Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        String uniqueValue = UUID.randomUUID().toString();
+
+        String request = """
+                {
+                    "employeeNumber": "EMP-%s",
+                    "firstName": "Jane",
+                    "lastName": "Doe",
+                    "email": "jane-%s@example.com",
+                    "jobTitle": "HR Manager",
+                    "department": "Human Resources",
+                    "employmentType": "PERMANENT",
+                    "startDate": "2026-10-01",
+                    "phone": "+27 82 987 6543"
+                }
+                """.formatted(uniqueValue, uniqueValue);
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(post("/api/v1/employees")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.firstName").value("Jane"))
+                .andExpect(jsonPath("$.lastName").value("Doe"))
+                .andExpect(jsonPath("$.jobTitle").value("HR Manager"))
+                .andExpect(jsonPath("$.department").value("Human Resources"))
+                .andExpect(jsonPath("$.employmentType").value("PERMANENT"))
+                .andExpect(jsonPath("$.startDate").value("2026-10-01"))
+                .andExpect(jsonPath("$.phone").value("+27 82 987 6543"));
     }
 }

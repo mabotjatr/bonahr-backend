@@ -42,7 +42,13 @@ public class EmployeeService {
 
         Employee employee = new Employee(organisation, request.employeeNumber(), request.firstName(), request.lastName());
 
+
         employee.setEmail(request.email());
+        employee.setJobTitle(request.jobTitle());
+        employee.setDepartment(request.department());
+        employee.setEmploymentType(request.employmentType());
+        employee.setStartDate(request.startDate());
+        employee.setPhone(request.phone());
 
         return employeeRepository.saveAndFlush(employee);
     }
@@ -74,6 +80,11 @@ public class EmployeeService {
         employee.setFirstName(request.firstName());
         employee.setLastName(request.lastName());
         employee.setEmail(request.email());
+        employee.setJobTitle(request.jobTitle());
+        employee.setDepartment(request.department());
+        employee.setEmploymentType(request.employmentType());
+        employee.setStartDate(request.startDate());
+        employee.setPhone(request.phone());
 
         return employeeRepository.saveAndFlush(employee);
     }

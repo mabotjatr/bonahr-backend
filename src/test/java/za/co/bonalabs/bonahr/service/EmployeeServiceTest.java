@@ -8,12 +8,14 @@ import za.co.bonalabs.bonahr.dto.employee.CreateEmployeeRequest;
 import za.co.bonalabs.bonahr.dto.employee.UpdateEmployeeRequest;
 import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.entity.EmployeeStatus;
+import za.co.bonalabs.bonahr.entity.EmploymentType;
 import za.co.bonalabs.bonahr.entity.Organisation;
 import za.co.bonalabs.bonahr.exception.DuplicateResourceException;
 import za.co.bonalabs.bonahr.exception.InvalidEmployeeStatusTransitionException;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -336,5 +338,34 @@ class EmployeeServiceTest {
         assertEquals("Employee termination must use the termination workflow", exception.getMessage());
 
         assertEquals(EmployeeStatus.ACTIVE, employee.getStatus());
+    }
+
+    @Test
+    void shouldUpdateEmployeeEmploymentDetails() {
+
+        Organisation organisation = new Organisation("Employment Details Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-" + UUID.randomUUID(), "John", "Doe", "john-" + UUID.randomUUID() + "@example.com"));
+
+        LocalDate startDate = LocalDate.of(2026, 10, 1);
+
+        UpdateEmployeeRequest request = new UpdateEmployeeRequest(
+                "John", "Doe", employee.getEmail(), "Senior Software Engineer", "Engineering",
+                EmploymentType.PERMANENT, startDate, "+27 82 123 4567");
+
+        Employee updatedEmployee = employeeService.updateEmployee(organisation.getId(), employee.getId(), request);
+
+        assertEquals("Senior Software Engineer", updatedEmployee.getJobTitle());
+
+        assertEquals("Engineering", updatedEmployee.getDepartment());
+
+        assertEquals(EmploymentType.PERMANENT, updatedEmployee.getEmploymentType());
+
+        assertEquals(startDate, updatedEmployee.getStartDate());
+
+        assertEquals("+27 82 123 4567", updatedEmployee.getPhone());
     }
 }

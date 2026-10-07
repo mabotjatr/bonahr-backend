@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import java.time.LocalDate;
 
 @Entity
 @Table(
@@ -60,6 +61,22 @@ public class Employee {
 
     @Column(length = 255)
     private String email;
+
+    @Column(name = "job_title", length = 150)
+    private String jobTitle;
+
+    @Column(length = 150)
+    private String department;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "employment_type", length = 30)
+    private EmploymentType employmentType;
+
+    @Column(name = "start_date")
+    private LocalDate startDate;
+
+    @Column(length = 50)
+    private String phone;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -133,6 +150,26 @@ public class Employee {
         return email;
     }
 
+    public String getJobTitle() {
+        return jobTitle;
+    }
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public EmploymentType getEmploymentType() {
+        return employmentType;
+    }
+
+    public LocalDate getStartDate() {
+        return startDate;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
     public EmployeeStatus getStatus() {
         return status;
     }
@@ -159,6 +196,26 @@ public class Employee {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public void setJobTitle(String jobTitle) {
+        this.jobTitle = jobTitle;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
+    }
+
+    public void setEmploymentType(EmploymentType employmentType) {
+        this.employmentType = employmentType;
+    }
+
+    public void setStartDate(LocalDate startDate) {
+        this.startDate = startDate;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
     }
 
     public void setStatus(EmployeeStatus status) {
