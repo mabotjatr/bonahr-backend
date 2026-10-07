@@ -21,6 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -415,5 +416,77 @@ class EmployeeControllerTest {
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON).content(request))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void shouldDeactivateEmployeeForAuthenticatedOrganisation() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Status API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        String request = """
+                {
+                    "status": "INACTIVE"
+                }
+                """;
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(patch("/api/v1/employees/" + employee.getId() + "/status").header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON).content(request)).andExpect(status().isOk()).andExpect(jsonPath("$.id").value(employee.getId().toString())).andExpect(jsonPath("$.organisationId").value(organisation.getId().toString())).andExpect(jsonPath("$.status").value("INACTIVE"));
+    }
+
+    @Test
+    void shouldReturnForbiddenWhenEmployeeRoleUpdatesEmployeeStatus() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Status Role Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        String request = """
+                {
+                    "status": "INACTIVE"
+                }
+                """;
+
+        String token = createAccessToken(organisation.getId(), List.of("EMPLOYEE"));
+
+        mockMvc.perform(patch("/api/v1/employees/" + employee.getId() + "/status")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldRejectTerminationThroughStatusEndpoint() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Termination API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        String request = """
+                {
+                    "status": "TERMINATED"
+                }
+                """;
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(patch("/api/v1/employees/" + employee.getId() + "/status")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isBadRequest());
     }
 }

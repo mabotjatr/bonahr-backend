@@ -5,7 +5,9 @@ import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.dto.employee.CreateEmployeeRequest;
 import za.co.bonalabs.bonahr.dto.employee.UpdateEmployeeRequest;
 import za.co.bonalabs.bonahr.entity.Employee;
+import za.co.bonalabs.bonahr.entity.EmployeeStatus;
 import za.co.bonalabs.bonahr.exception.DuplicateResourceException;
+import za.co.bonalabs.bonahr.exception.InvalidEmployeeStatusTransitionException;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 import za.co.bonalabs.bonahr.repository.EmployeeRepository;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
@@ -72,6 +74,19 @@ public class EmployeeService {
         employee.setFirstName(request.firstName());
         employee.setLastName(request.lastName());
         employee.setEmail(request.email());
+
+        return employeeRepository.saveAndFlush(employee);
+    }
+
+    public Employee updateEmployeeStatus(UUID organisationId, UUID employeeId, EmployeeStatus status) {
+
+        Employee employee = getEmployee(organisationId, employeeId);
+
+        if (status == EmployeeStatus.TERMINATED) {
+            throw new InvalidEmployeeStatusTransitionException("Employee termination must use the termination workflow");
+        }
+
+        employee.setStatus(status);
 
         return employeeRepository.saveAndFlush(employee);
     }

@@ -4,10 +4,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import za.co.bonalabs.bonahr.dto.employee.CreateEmployeeRequest;
-import za.co.bonalabs.bonahr.dto.employee.EmployeeMapper;
-import za.co.bonalabs.bonahr.dto.employee.EmployeeResponse;
-import za.co.bonalabs.bonahr.dto.employee.UpdateEmployeeRequest;
+import za.co.bonalabs.bonahr.dto.employee.*;
 import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.security.JwtAuthenticationDetails;
 import za.co.bonalabs.bonahr.service.EmployeeService;
@@ -66,6 +63,16 @@ public class EmployeeController {
         JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
 
         Employee employee = employeeService.updateEmployee(details.organisationId(), id, request);
+
+        return ResponseEntity.ok(EmployeeMapper.toResponse(employee));
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<EmployeeResponse> updateEmployeeStatus(@PathVariable UUID id, @Valid @RequestBody UpdateEmployeeStatusRequest request, Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        Employee employee = employeeService.updateEmployeeStatus(details.organisationId(), id, request.status());
 
         return ResponseEntity.ok(EmployeeMapper.toResponse(employee));
     }

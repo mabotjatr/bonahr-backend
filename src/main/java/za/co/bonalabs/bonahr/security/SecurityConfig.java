@@ -46,6 +46,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/v1/employees/**")
                         .hasAnyRole("OWNER", "HR_ADMIN")
 
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/employees/**")
+                        .hasAnyRole("OWNER", "HR_ADMIN")
+
                         .anyRequest().authenticated()
                 )
 

@@ -10,6 +10,7 @@ import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.entity.EmployeeStatus;
 import za.co.bonalabs.bonahr.entity.Organisation;
 import za.co.bonalabs.bonahr.exception.DuplicateResourceException;
+import za.co.bonalabs.bonahr.exception.InvalidEmployeeStatusTransitionException;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 
@@ -299,5 +300,41 @@ class EmployeeServiceTest {
 
         Organisation finalOrganisation = organisation;
         assertThrows(DuplicateResourceException.class, () -> employeeService.updateEmployee(finalOrganisation.getId(), secondEmployee.getId(), updateRequest));
+    }
+
+    @Test
+    void shouldDeactivateEmployeeWithinOrganisation() {
+
+        Organisation organisation = new Organisation("Employee Status Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-" + UUID.randomUUID(), "John", "Doe", "john-" + UUID.randomUUID() + "@example.com"));
+
+        Employee updatedEmployee = employeeService.updateEmployeeStatus(organisation.getId(), employee.getId(), EmployeeStatus.INACTIVE);
+
+        assertEquals(EmployeeStatus.INACTIVE, updatedEmployee.getStatus());
+
+        assertEquals(employee.getId(), updatedEmployee.getId());
+    }
+
+    @Test
+    void shouldRejectTerminationThroughStatusUpdate() {
+
+        Organisation organisation = new Organisation("Employee Termination Guard Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-" + UUID.randomUUID(), "John", "Doe", "john-" + UUID.randomUUID() + "@example.com"));
+
+        Organisation finalOrganisation = organisation;
+        InvalidEmployeeStatusTransitionException exception = assertThrows(InvalidEmployeeStatusTransitionException .class, () ->
+                employeeService.updateEmployeeStatus(finalOrganisation.getId(), employee.getId(), EmployeeStatus.TERMINATED));
+
+        assertEquals("Employee termination must use the termination workflow", exception.getMessage());
+
+        assertEquals(EmployeeStatus.ACTIVE, employee.getStatus());
     }
 }
