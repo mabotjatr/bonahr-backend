@@ -13,6 +13,7 @@ import za.co.bonalabs.bonahr.repository.EmployeeRepository;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -120,5 +121,20 @@ public class EmployeeService {
                         organisationId,
                         status
                 );
+    }
+
+    @Transactional(readOnly = true)
+    public List<Employee> getEmployeesByDepartment(UUID organisationId, String department) {
+        return employeeRepository.findAllByOrganisationIdAndDepartmentIgnoreCaseOrderByLastNameAscFirstNameAsc(organisationId, department);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Employee> filterEmployees(UUID organisationId, String search, EmployeeStatus status, String department) {
+
+        String normalizedSearch = search == null || search.isBlank() ? "" : search.trim().toLowerCase(Locale.ROOT);
+
+        String normalizedDepartment = department == null || department.isBlank() ? "" : department.trim().toLowerCase(Locale.ROOT);
+
+        return employeeRepository.findAllByFilters(organisationId, normalizedSearch, status, normalizedDepartment);
     }
 }

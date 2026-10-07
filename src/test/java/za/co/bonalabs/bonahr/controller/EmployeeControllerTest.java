@@ -651,4 +651,76 @@ class EmployeeControllerTest {
                 .andExpect(jsonPath("$[0].id").value(activeEmployee.getId().toString()))
                 .andExpect(jsonPath("$[0].status").value("ACTIVE"));
     }
+
+    @Test
+    void shouldFilterEmployeesByDepartmentForAuthenticatedOrganisation() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Department Filter API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee engineeringEmployee = new Employee(organisation, "EMP-E-" + UUID.randomUUID(), "John", "Engineer");
+
+        engineeringEmployee.setDepartment("Engineering");
+
+        Employee hrEmployee = new Employee(organisation, "EMP-H-" + UUID.randomUUID(), "Jane", "HR");
+
+        hrEmployee.setDepartment("Human Resources");
+
+        engineeringEmployee = employeeRepository.saveAndFlush(engineeringEmployee);
+
+        employeeRepository.saveAndFlush(hrEmployee);
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/employees").param("department", "engineering")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(engineeringEmployee.getId().toString()))
+                .andExpect(jsonPath("$[0].department").value("Engineering"));
+    }
+
+    @Test
+    void shouldCombineEmployeeFilters() throws Exception {
+
+        Organisation organisation = new Organisation("Combined Filter Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        // Should match all filters
+        Employee matchingEmployee = new Employee(organisation, "EMP-001-" + UUID.randomUUID(), "John", "Smith");
+
+        matchingEmployee.setDepartment("Engineering");
+
+        matchingEmployee = employeeRepository.saveAndFlush(matchingEmployee);
+
+        // Matches name + department, but wrong status
+        Employee inactiveEmployee = new Employee(organisation, "EMP-002-" + UUID.randomUUID(), "John", "Doe");
+
+        inactiveEmployee.setDepartment("Engineering");
+        inactiveEmployee.setStatus(EmployeeStatus.INACTIVE);
+
+        employeeRepository.saveAndFlush(inactiveEmployee);
+
+        // Matches name + status, but wrong department
+        Employee hrEmployee = new Employee(organisation, "EMP-003-" + UUID.randomUUID(), "John", "Jones");
+
+        hrEmployee.setDepartment("Human Resources");
+
+        employeeRepository.saveAndFlush(hrEmployee);
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/employees")
+                .param("search", "john")
+                .param("status", "ACTIVE")
+                .param("department", "Engineering")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(matchingEmployee.getId().toString()))
+                .andExpect(jsonPath("$[0].department").value("Engineering"))
+                .andExpect(jsonPath("$[0].status").value("ACTIVE"));
+    }
 }

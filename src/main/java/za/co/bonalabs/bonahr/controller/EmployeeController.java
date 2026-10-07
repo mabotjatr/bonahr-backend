@@ -52,24 +52,12 @@ public class EmployeeController {
     public ResponseEntity<List<EmployeeResponse>> getEmployees(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) EmployeeStatus status,
+            @RequestParam(required = false) String department,
             Authentication authentication) {
 
         JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
 
-        List<Employee> employees;
-
-        if (search != null && !search.isBlank()) {
-
-            employees = employeeService.searchEmployees(details.organisationId(), search.trim());
-
-        } else if (status != null) {
-
-            employees = employeeService.getEmployeesByStatus(details.organisationId(), status);
-
-        } else {
-
-            employees = employeeService.getEmployees(details.organisationId());
-        }
+        List<Employee> employees = employeeService.filterEmployees(details.organisationId(), search, status, department);
 
         List<EmployeeResponse> response = employees.stream().map(EmployeeMapper::toResponse).toList();
 

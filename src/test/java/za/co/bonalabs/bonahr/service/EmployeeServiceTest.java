@@ -438,4 +438,42 @@ class EmployeeServiceTest {
 
         assertEquals(EmployeeStatus.ACTIVE, employees.getFirst().getStatus());
     }
+
+    @Test
+    void shouldReturnEmployeesByDepartmentWithinOrganisation() {
+
+        Organisation organisation = new Organisation("Employee Department Filter Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee engineeringEmployee = employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-E-" + UUID.randomUUID(),
+                "John",
+                "Engineer",
+                "john-" + UUID.randomUUID() + "@example.com",
+                "Software Engineer",
+                "Engineering",
+                EmploymentType.PERMANENT,
+                LocalDate.of(2026, 10, 1),
+                "+27 82 111 1111"));
+
+        employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-H-" + UUID.randomUUID(),
+                "Jane",
+                "HR",
+                "jane-" + UUID.randomUUID() + "@example.com",
+                "HR Manager",
+                "Human Resources",
+                EmploymentType.PERMANENT,
+                LocalDate.of(2026, 10, 1),
+                "+27 82 222 2222"));
+
+        List<Employee> employees = employeeService.getEmployeesByDepartment(organisation.getId(), "engineering");
+
+        assertEquals(1, employees.size());
+
+        assertEquals(engineeringEmployee.getId(), employees.getFirst().getId());
+
+        assertEquals("Engineering", employees.getFirst().getDepartment());
+    }
 }
