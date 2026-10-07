@@ -101,4 +101,24 @@ public class EmployeeService {
 
         return employeeRepository.saveAndFlush(employee);
     }
+
+    @Transactional(readOnly = true)
+    public List<Employee> searchEmployees(UUID organisationId, String search) {
+        return employeeRepository
+                .findAllByOrganisationIdAndFirstNameContainingIgnoreCaseOrOrganisationIdAndLastNameContainingIgnoreCaseOrderByLastNameAscFirstNameAsc(
+                        organisationId,
+                        search,
+                        organisationId,
+                        search
+                );
+    }
+
+    @Transactional(readOnly = true)
+    public List<Employee> getEmployeesByStatus(UUID organisationId, EmployeeStatus status) {
+        return employeeRepository
+                .findAllByOrganisationIdAndStatusOrderByLastNameAscFirstNameAsc(
+                        organisationId,
+                        status
+                );
+    }
 }

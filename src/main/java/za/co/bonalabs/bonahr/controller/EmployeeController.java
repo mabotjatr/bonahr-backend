@@ -6,6 +6,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import za.co.bonalabs.bonahr.dto.employee.*;
 import za.co.bonalabs.bonahr.entity.Employee;
+import za.co.bonalabs.bonahr.entity.EmployeeStatus;
 import za.co.bonalabs.bonahr.security.JwtAuthenticationDetails;
 import za.co.bonalabs.bonahr.service.EmployeeService;
 
@@ -48,13 +49,31 @@ public class EmployeeController {
     }
 
     @GetMapping
-    public ResponseEntity<List<EmployeeResponse>> getEmployees(Authentication authentication) {
+    public ResponseEntity<List<EmployeeResponse>> getEmployees(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) EmployeeStatus status,
+            Authentication authentication) {
 
         JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
 
-        List<EmployeeResponse> employees = employeeService.getEmployees(details.organisationId()).stream().map(EmployeeMapper::toResponse).toList();
+        List<Employee> employees;
 
-        return ResponseEntity.ok(employees);
+        if (search != null && !search.isBlank()) {
+
+            employees = employeeService.searchEmployees(details.organisationId(), search.trim());
+
+        } else if (status != null) {
+
+            employees = employeeService.getEmployeesByStatus(details.organisationId(), status);
+
+        } else {
+
+            employees = employeeService.getEmployees(details.organisationId());
+        }
+
+        List<EmployeeResponse> response = employees.stream().map(EmployeeMapper::toResponse).toList();
+
+        return ResponseEntity.ok(response);
     }
 
     @PutMapping("/{id}")

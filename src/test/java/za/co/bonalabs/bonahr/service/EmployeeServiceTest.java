@@ -368,4 +368,74 @@ class EmployeeServiceTest {
 
         assertEquals("+27 82 123 4567", updatedEmployee.getPhone());
     }
+
+    @Test
+    void shouldSearchEmployeesByNameWithinOrganisation() {
+
+        Organisation organisation = new Organisation("Employee Search Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-001-" + UUID.randomUUID(), "John", "Smith", "john-" + UUID.randomUUID() + "@example.com"));
+
+        employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-002-" + UUID.randomUUID(), "Jane", "Doe", "jane-" + UUID.randomUUID() + "@example.com"));
+
+        List<Employee> employees = employeeService.searchEmployees(organisation.getId(), "john");
+
+        assertEquals(1, employees.size());
+        assertEquals("John", employees.getFirst().getFirstName());
+        assertEquals("Smith", employees.getFirst().getLastName());
+    }
+
+    @Test
+    void shouldNotReturnSearchResultsFromAnotherOrganisation() {
+
+        Organisation organisationA = new Organisation("Employee Search Tenant A " + UUID.randomUUID());
+
+        Organisation organisationB = new Organisation("Employee Search Tenant B " + UUID.randomUUID());
+
+        organisationA = organisationRepository.saveAndFlush(organisationA);
+
+        organisationB = organisationRepository.saveAndFlush(organisationB);
+
+        employeeService.createEmployee(organisationA.getId(), new CreateEmployeeRequest(
+                "EMP-A-" + UUID.randomUUID(), "John", "Smith", "john-a-" + UUID.randomUUID() + "@example.com"));
+
+        employeeService.createEmployee(organisationB.getId(), new CreateEmployeeRequest(
+                "EMP-B-" + UUID.randomUUID(), "John", "OtherTenant", "john-b-" + UUID.randomUUID() + "@example.com"));
+
+        List<Employee> employees = employeeService.searchEmployees(organisationA.getId(), "john");
+
+        assertEquals(1, employees.size());
+
+        assertEquals(organisationA.getId(), employees.getFirst().getOrganisation().getId());
+
+        assertEquals("Smith", employees.getFirst().getLastName());
+    }
+
+    @Test
+    void shouldReturnEmployeesByStatusWithinOrganisation() {
+
+        Organisation organisation = new Organisation("Employee Status Filter Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee activeEmployee = employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-A-" + UUID.randomUUID(), "Active", "Employee", "active-" + UUID.randomUUID() + "@example.com"));
+
+        Employee inactiveEmployee = employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-I-" + UUID.randomUUID(), "Inactive", "Employee", "inactive-" + UUID.randomUUID() + "@example.com"));
+
+        employeeService.updateEmployeeStatus(organisation.getId(), inactiveEmployee.getId(), EmployeeStatus.INACTIVE);
+
+        List<Employee> employees = employeeService.getEmployeesByStatus(organisation.getId(), EmployeeStatus.ACTIVE);
+
+        assertEquals(1, employees.size());
+
+        assertEquals(activeEmployee.getId(), employees.getFirst().getId());
+
+        assertEquals(EmployeeStatus.ACTIVE, employees.getFirst().getStatus());
+    }
 }

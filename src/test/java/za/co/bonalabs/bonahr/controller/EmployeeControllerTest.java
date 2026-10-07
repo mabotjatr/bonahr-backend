@@ -7,6 +7,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import za.co.bonalabs.bonahr.entity.EmployeeStatus;
 import za.co.bonalabs.bonahr.entity.EmploymentType;
 import za.co.bonalabs.bonahr.entity.Organisation;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
@@ -598,5 +599,56 @@ class EmployeeControllerTest {
                 .andExpect(jsonPath("$.employmentType").value("PERMANENT"))
                 .andExpect(jsonPath("$.startDate").value("2026-10-01"))
                 .andExpect(jsonPath("$.phone").value("+27 82 987 6543"));
+    }
+
+    @Test
+    void shouldSearchEmployeesByNameForAuthenticatedOrganisation() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Search API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee john = new Employee(organisation, "EMP-001-" + UUID.randomUUID(), "John", "Smith");
+
+        Employee jane = new Employee(organisation, "EMP-002-" + UUID.randomUUID(), "Jane", "Doe");
+
+        employeeRepository.saveAndFlush(john);
+        employeeRepository.saveAndFlush(jane);
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/employees").param("search", "john")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].firstName").value("John"))
+                .andExpect(jsonPath("$[0].lastName").value("Smith"));
+    }
+
+    @Test
+    void shouldFilterEmployeesByStatusForAuthenticatedOrganisation() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Status Filter API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee activeEmployee = new Employee(organisation, "EMP-A-" + UUID.randomUUID(), "Active", "Employee");
+
+        Employee inactiveEmployee = new Employee(organisation, "EMP-I-" + UUID.randomUUID(), "Inactive", "Employee");
+
+        activeEmployee = employeeRepository.saveAndFlush(activeEmployee);
+
+        inactiveEmployee = employeeRepository.saveAndFlush(inactiveEmployee);
+
+        inactiveEmployee.setStatus(EmployeeStatus.INACTIVE);
+        employeeRepository.saveAndFlush(inactiveEmployee);
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/employees").param("status", "ACTIVE")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(activeEmployee.getId().toString()))
+                .andExpect(jsonPath("$[0].status").value("ACTIVE"));
     }
 }
