@@ -236,4 +236,48 @@ class EmployeeControllerTest {
                 .andExpect(jsonPath("$.lastName").value("Visible"))
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
     }
+
+    @Test
+    void shouldReturnOnlyEmployeesForAuthenticatedOrganisation() throws Exception {
+
+        Organisation organisationA = new Organisation("Employee List API A " + UUID.randomUUID());
+
+        Organisation organisationB = new Organisation("Employee List API B " + UUID.randomUUID());
+
+        organisationA = organisationRepository.saveAndFlush(organisationA);
+
+        organisationB = organisationRepository.saveAndFlush(organisationB);
+
+        Employee employeeA1 = new Employee(organisationA, "EMP-A-001", "John", "Zulu");
+
+        Employee employeeA2 = new Employee(organisationA, "EMP-A-002", "Jane", "Adams");
+
+        Employee employeeB = new Employee(organisationB, "EMP-B-001", "Other", "Tenant");
+
+        employeeRepository.saveAndFlush(employeeA1);
+        employeeRepository.saveAndFlush(employeeA2);
+        employeeRepository.saveAndFlush(employeeB);
+
+        String token = createAccessToken(organisationA.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/employees")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].organisationId").value(organisationA.getId().toString()))
+                .andExpect(jsonPath("$[1].organisationId").value(organisationA.getId().toString()))
+                .andExpect(jsonPath("$[0].lastName").value("Adams"))
+                .andExpect(jsonPath("$[1].lastName").value("Zulu"));
+    }
+
+    @Test
+    void shouldReturnForbiddenWhenEmployeeRoleListsEmployees() throws Exception {
+
+        Organisation organisation = new Organisation("Employee List Role Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        String token = createAccessToken(organisation.getId(), List.of("EMPLOYEE"));
+
+        mockMvc.perform(get("/api/v1/employees").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
+    }
 }

@@ -9,6 +9,7 @@ import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 import za.co.bonalabs.bonahr.repository.EmployeeRepository;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -48,5 +49,11 @@ public class EmployeeService {
 
         return employeeRepository.findByIdAndOrganisationId(employeeId, organisationId).orElseThrow(() ->
                 new ResourceNotFoundException("Employee not found: " + employeeId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Employee> getEmployees(UUID organisationId) {
+        return employeeRepository
+                .findAllByOrganisationIdOrderByLastNameAscFirstNameAsc( organisationId);
     }
 }

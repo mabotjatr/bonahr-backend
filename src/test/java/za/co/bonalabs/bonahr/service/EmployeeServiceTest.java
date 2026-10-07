@@ -12,6 +12,7 @@ import za.co.bonalabs.bonahr.exception.DuplicateResourceException;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -183,5 +184,37 @@ class EmployeeServiceTest {
                 employeeService.getEmployee(finalOrganisationB.getId(), employee.getId()));
 
         assertEquals("Employee not found: " + employee.getId(), exception.getMessage());
+    }
+
+    @Test
+    void shouldReturnOnlyEmployeesForOrganisation() {
+
+        Organisation organisationA = new Organisation("Employee List A " + UUID.randomUUID());
+
+        Organisation organisationB = new Organisation("Employee List B " + UUID.randomUUID());
+
+        organisationA = organisationRepository.saveAndFlush(organisationA);
+
+        organisationB = organisationRepository.saveAndFlush(organisationB);
+
+        employeeService.createEmployee(organisationA.getId(), new CreateEmployeeRequest(
+                "EMP-A-001", "John", "Zulu", "john-a-" + UUID.randomUUID() + "@example.com"));
+
+        employeeService.createEmployee(organisationA.getId(), new CreateEmployeeRequest(
+                "EMP-A-002", "Jane", "Adams", "jane-a-" + UUID.randomUUID() + "@example.com"));
+
+        employeeService.createEmployee(organisationB.getId(), new CreateEmployeeRequest(
+                "EMP-B-001", "Other", "Tenant", "other-" + UUID.randomUUID() + "@example.com"));
+
+        List<Employee> employees = employeeService.getEmployees(organisationA.getId());
+
+        assertEquals(2, employees.size());
+
+        Organisation finalOrganisationA = organisationA;
+        assertTrue(employees.stream().allMatch(employee -> employee.getOrganisation().getId().equals(finalOrganisationA.getId())));
+
+        assertEquals("Adams", employees.get(0).getLastName());
+
+        assertEquals("Zulu", employees.get(1).getLastName());
     }
 }

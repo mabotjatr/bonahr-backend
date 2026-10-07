@@ -12,6 +12,7 @@ import za.co.bonalabs.bonahr.security.JwtAuthenticationDetails;
 import za.co.bonalabs.bonahr.service.EmployeeService;
 
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -46,5 +47,15 @@ public class EmployeeController {
         Employee employee = employeeService.getEmployee(details.organisationId(), id);
 
         return ResponseEntity.ok(EmployeeMapper.toResponse(employee));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<EmployeeResponse>> getEmployees(Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        List<EmployeeResponse> employees = employeeService.getEmployees(details.organisationId()).stream().map(EmployeeMapper::toResponse).toList();
+
+        return ResponseEntity.ok(employees);
     }
 }
