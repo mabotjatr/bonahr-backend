@@ -37,8 +37,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,"/api/v1/organisations/**")
                         .hasAnyRole("OWNER","HR_ADMIN")
 
-                        .anyRequest()
-                        .authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/employees")
+                        .hasAnyRole("OWNER", "HR_ADMIN")
+
+                        .requestMatchers(HttpMethod.GET, "/api/v1/employees/**")
+                        .hasAnyRole("OWNER", "HR_ADMIN")
+
+                        .anyRequest().authenticated()
                 )
 
                 .exceptionHandling(exception -> exception

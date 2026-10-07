@@ -1,0 +1,52 @@
+package za.co.bonalabs.bonahr.service;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import za.co.bonalabs.bonahr.dto.employee.CreateEmployeeRequest;
+import za.co.bonalabs.bonahr.entity.Employee;
+import za.co.bonalabs.bonahr.exception.DuplicateResourceException;
+import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
+import za.co.bonalabs.bonahr.repository.EmployeeRepository;
+import za.co.bonalabs.bonahr.repository.OrganisationRepository;
+
+import java.util.UUID;
+
+@Service
+@Transactional
+public class EmployeeService {
+
+    private final EmployeeRepository employeeRepository;
+    private final OrganisationRepository organisationRepository;
+
+    public EmployeeService(EmployeeRepository employeeRepository, OrganisationRepository organisationRepository) {
+        this.employeeRepository = employeeRepository;
+        this.organisationRepository = organisationRepository;
+    }
+
+    public Employee createEmployee(UUID organisationId, CreateEmployeeRequest request) {
+
+        var organisation = organisationRepository.findById(organisationId).orElseThrow(() -> new ResourceNotFoundException("Organisation not found: " + organisationId));
+
+        if (employeeRepository.existsByOrganisationIdAndEmployeeNumber(organisationId, request.employeeNumber())) {
+            throw new DuplicateResourceException("Employee number already exists: " + request.employeeNumber());
+        }
+
+        if (request.email() != null && !request.email().isBlank() && employeeRepository.existsByOrganisationIdAndEmailIgnoreCase(organisationId, request.email())) {
+
+            throw new DuplicateResourceException("Employee email already exists: " + request.email());
+        }
+
+        Employee employee = new Employee(organisation, request.employeeNumber(), request.firstName(), request.lastName());
+
+        employee.setEmail(request.email());
+
+        return employeeRepository.saveAndFlush(employee);
+    }
+
+    @Transactional(readOnly = true)
+    public Employee getEmployee(UUID organisationId, UUID employeeId) {
+
+        return employeeRepository.findByIdAndOrganisationId(employeeId, organisationId).orElseThrow(() ->
+                new ResourceNotFoundException("Employee not found: " + employeeId));
+    }
+}
