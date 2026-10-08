@@ -11,6 +11,11 @@ import org.springframework.http.HttpMethod;
 @Configuration
 public class SecurityConfig {
 
+    public static final String API_V_1_EMPLOYEES = "/api/v1/employees/**";
+    public static final String OWNER = "OWNER";
+    public static final String HR_ADMIN = "HR_ADMIN";
+    public static final String API_V_1_ORGANISATIONS = "/api/v1/organisations";
+
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter(
             JwtService jwtService
@@ -31,23 +36,26 @@ public class SecurityConfig {
                                 "/api/v1/health")
                         .permitAll()
 
-                        .requestMatchers( HttpMethod.POST,"/api/v1/organisations")
+                        .requestMatchers( HttpMethod.POST, API_V_1_ORGANISATIONS)
                         .denyAll()
 
                         .requestMatchers(HttpMethod.GET,"/api/v1/organisations/**")
-                        .hasAnyRole("OWNER","HR_ADMIN")
+                        .hasAnyRole(OWNER, SecurityConfig.HR_ADMIN)
 
                         .requestMatchers(HttpMethod.POST, "/api/v1/employees")
-                        .hasAnyRole("OWNER", "HR_ADMIN")
+                        .hasAnyRole(OWNER, HR_ADMIN)
 
-                        .requestMatchers(HttpMethod.GET, "/api/v1/employees/**")
-                        .hasAnyRole("OWNER", "HR_ADMIN")
+                        .requestMatchers(HttpMethod.POST, API_V_1_EMPLOYEES)
+                        .hasAnyRole(OWNER, HR_ADMIN)
 
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/employees/**")
-                        .hasAnyRole("OWNER", "HR_ADMIN")
+                        .requestMatchers(HttpMethod.GET, API_V_1_EMPLOYEES)
+                        .hasAnyRole(OWNER, HR_ADMIN)
 
-                        .requestMatchers(HttpMethod.PATCH, "/api/v1/employees/**")
-                        .hasAnyRole("OWNER", "HR_ADMIN")
+                        .requestMatchers(HttpMethod.PUT, API_V_1_EMPLOYEES)
+                        .hasAnyRole(OWNER, HR_ADMIN)
+
+                        .requestMatchers(HttpMethod.PATCH, API_V_1_EMPLOYEES)
+                        .hasAnyRole(OWNER,HR_ADMIN)
 
                         .anyRequest().authenticated()
                 )

@@ -1,6 +1,7 @@
 package za.co.bonalabs.bonahr.controller;
 
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -9,9 +10,11 @@ import org.springframework.data.domain.PageRequest;
 import za.co.bonalabs.bonahr.dto.employee.EmployeePageResponse;
 import za.co.bonalabs.bonahr.dto.employee.*;
 import za.co.bonalabs.bonahr.entity.Employee;
+import za.co.bonalabs.bonahr.entity.EmployeeDocument;
 import za.co.bonalabs.bonahr.entity.EmployeeStatus;
 import za.co.bonalabs.bonahr.security.JwtAuthenticationDetails;
 import za.co.bonalabs.bonahr.service.EmployeeAuditService;
+import za.co.bonalabs.bonahr.service.EmployeeDocumentService;
 import za.co.bonalabs.bonahr.service.EmployeeService;
 import za.co.bonalabs.bonahr.entity.EmployeeAuditLog;
 
@@ -25,10 +28,12 @@ public class EmployeeController {
 
     private final EmployeeService employeeService;
     private final EmployeeAuditService employeeAuditService;
+    private final EmployeeDocumentService employeeDocumentService;
 
-    public EmployeeController(EmployeeService employeeService, EmployeeAuditService employeeAuditService) {
+    public EmployeeController(EmployeeService employeeService, EmployeeAuditService employeeAuditService, EmployeeDocumentService employeeDocumentService) {
         this.employeeService = employeeService;
         this.employeeAuditService = employeeAuditService;
+        this.employeeDocumentService = employeeDocumentService;
     }
 
     @PostMapping
@@ -131,5 +136,52 @@ public class EmployeeController {
                         auditLog.getCreatedAt())).toList();
 
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/documents")
+    public ResponseEntity<List<EmployeeDocumentResponse>> getEmployeeDocuments(@PathVariable UUID id, Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        List<EmployeeDocument> documents = employeeDocumentService.getEmployeeDocuments(details.organisationId(), id);
+
+        List<EmployeeDocumentResponse> response = documents.stream().map(document ->
+                new EmployeeDocumentResponse(
+                        document.getId(),
+                        document.getEmployee().getId(),
+                        document.getDocumentType(),
+                        document.getFileName(),
+                        document.getStorageKey(),
+                        document.getMimeType(),
+                        document.getFileSize(),
+                        document.getUploadedByUserId(),
+                        document.getCreatedAt()))
+                .toList();
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/documents")
+    public ResponseEntity<EmployeeDocumentResponse> createEmployeeDocument(
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateEmployeeDocumentRequest request,
+            Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        EmployeeDocument document = employeeDocumentService.createEmployeeDocument(details.organisationId(), id, request, details.userId());
+
+        EmployeeDocumentResponse response = new EmployeeDocumentResponse(
+                document.getId(),
+                document.getEmployee().getId(),
+                document.getDocumentType(),
+                document.getFileName(),
+                document.getStorageKey(),
+                document.getMimeType(),
+                document.getFileSize(),
+                document.getUploadedByUserId(),
+                document.getCreatedAt());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }
