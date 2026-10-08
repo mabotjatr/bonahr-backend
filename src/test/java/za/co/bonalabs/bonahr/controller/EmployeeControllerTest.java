@@ -723,4 +723,92 @@ class EmployeeControllerTest {
                 .andExpect(jsonPath("$[0].department").value("Engineering"))
                 .andExpect(jsonPath("$[0].status").value("ACTIVE"));
     }
+
+    @Test
+    void shouldReturnPaginatedEmployeesForAuthenticatedOrganisation() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Pagination API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        for (int i = 1; i <= 5; i++) {
+
+            Employee employee = new Employee(organisation, "EMP-" + i + "-" + UUID.randomUUID(), "Employee" + i, "User" + i);
+
+            employeeRepository.saveAndFlush(employee);
+        }
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/employees/paged")
+                .param("page", "0")
+                .param("size", "2")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.totalElements").value(5))
+                .andExpect(jsonPath("$.totalPages").value(3))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(2));
+    }
+
+    @Test
+    void shouldReturnFilteredPaginatedEmployeesForAuthenticatedOrganisation() throws Exception {
+
+        Organisation organisationA = new Organisation("Paged Filter Tenant A " + UUID.randomUUID());
+
+        Organisation organisationB = new Organisation("Paged Filter Tenant B " + UUID.randomUUID());
+
+        organisationA = organisationRepository.saveAndFlush(organisationA);
+
+        organisationB = organisationRepository.saveAndFlush(organisationB);
+
+        // Matches all filters
+        Employee matchingEmployee = new Employee(organisationA, "EMP-A-001-" + UUID.randomUUID(), "John", "Smith");
+
+        matchingEmployee.setDepartment("Engineering");
+
+        matchingEmployee = employeeRepository.saveAndFlush(matchingEmployee);
+
+        // Same tenant, but wrong status
+        Employee inactiveEmployee = new Employee(organisationA, "EMP-A-002-" + UUID.randomUUID(), "John", "Doe");
+
+        inactiveEmployee.setDepartment("Engineering");
+        inactiveEmployee.setStatus(EmployeeStatus.INACTIVE);
+
+        employeeRepository.saveAndFlush(inactiveEmployee);
+
+        // Same tenant, wrong department
+        Employee hrEmployee = new Employee(organisationA, "EMP-A-003-" + UUID.randomUUID(), "John", "Jones");
+
+        hrEmployee.setDepartment("Human Resources");
+
+        employeeRepository.saveAndFlush(hrEmployee);
+
+        // Different tenant — must never appear
+        Employee otherTenantEmployee = new Employee(organisationB, "EMP-B-001-" + UUID.randomUUID(), "John", "OtherTenant");
+
+        otherTenantEmployee.setDepartment("Engineering");
+
+        employeeRepository.saveAndFlush(otherTenantEmployee);
+
+        String token = createAccessToken(organisationA.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/employees/paged")
+                .param("page", "0")
+                .param("size", "2")
+                .param("search", "john")
+                .param("status", "ACTIVE")
+                .param("department", "Engineering")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(2))
+                .andExpect(jsonPath("$.content[0].id").value(matchingEmployee.getId().toString()))
+                .andExpect(jsonPath("$.content[0].department").value("Engineering"))
+                .andExpect(jsonPath("$.content[0].status").value("ACTIVE"));
+    }
 }

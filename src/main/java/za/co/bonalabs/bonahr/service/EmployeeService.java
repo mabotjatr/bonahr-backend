@@ -1,5 +1,7 @@
 package za.co.bonalabs.bonahr.service;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.dto.employee.CreateEmployeeRequest;
@@ -136,5 +138,15 @@ public class EmployeeService {
         String normalizedDepartment = department == null || department.isBlank() ? "" : department.trim().toLowerCase(Locale.ROOT);
 
         return employeeRepository.findAllByFilters(organisationId, normalizedSearch, status, normalizedDepartment);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Employee> filterEmployeesPaged(UUID organisationId, String search, EmployeeStatus status, String department, Pageable pageable) {
+
+        String normalizedSearch = search == null || search.isBlank() ? "" : search.trim().toLowerCase(Locale.ROOT);
+
+        String normalizedDepartment = department == null || department.isBlank() ? "" : department.trim().toLowerCase(Locale.ROOT);
+
+        return employeeRepository.findAllByFiltersPaged(organisationId, normalizedSearch, status, normalizedDepartment, pageable);
     }
 }

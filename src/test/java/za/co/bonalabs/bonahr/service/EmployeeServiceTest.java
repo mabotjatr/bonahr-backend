@@ -3,6 +3,8 @@ package za.co.bonalabs.bonahr.service;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.dto.employee.CreateEmployeeRequest;
 import za.co.bonalabs.bonahr.dto.employee.UpdateEmployeeRequest;
@@ -475,5 +477,30 @@ class EmployeeServiceTest {
         assertEquals(engineeringEmployee.getId(), employees.getFirst().getId());
 
         assertEquals("Engineering", employees.getFirst().getDepartment());
+    }
+
+    @Test
+    void shouldReturnPaginatedEmployeesForOrganisation() {
+
+        Organisation organisation = new Organisation("Employee Pagination Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        for (int i = 1; i <= 5; i++) {
+
+            employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                    "EMP-" + i + "-" + UUID.randomUUID(),
+                    "Employee" + i,
+                    "User" + i,
+                    "employee-" + i + "-" + UUID.randomUUID() + "@example.com"));
+        }
+
+        Page<Employee> page = employeeService.filterEmployeesPaged(organisation.getId(), null, null, null, PageRequest.of(0, 2));
+
+        assertEquals(2, page.getContent().size());
+        assertEquals(5, page.getTotalElements());
+        assertEquals(3, page.getTotalPages());
+        assertEquals(0, page.getNumber());
+        assertEquals(2, page.getSize());
     }
 }

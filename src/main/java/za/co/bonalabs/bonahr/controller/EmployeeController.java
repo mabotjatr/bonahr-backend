@@ -4,6 +4,9 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import za.co.bonalabs.bonahr.dto.employee.EmployeePageResponse;
 import za.co.bonalabs.bonahr.dto.employee.*;
 import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.entity.EmployeeStatus;
@@ -75,12 +78,35 @@ public class EmployeeController {
     }
 
     @PatchMapping("/{id}/status")
-    public ResponseEntity<EmployeeResponse> updateEmployeeStatus(@PathVariable UUID id, @Valid @RequestBody UpdateEmployeeStatusRequest request, Authentication authentication) {
+    public ResponseEntity<EmployeeResponse> updateEmployeeStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateEmployeeStatusRequest request,
+            Authentication authentication) {
 
         JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
 
         Employee employee = employeeService.updateEmployeeStatus(details.organisationId(), id, request.status());
 
         return ResponseEntity.ok(EmployeeMapper.toResponse(employee));
+    }
+
+    @GetMapping("/paged")
+    public ResponseEntity<EmployeePageResponse> getEmployeesPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) EmployeeStatus status,
+            @RequestParam(required = false) String department, Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        Page<Employee> employeePage = employeeService.filterEmployeesPaged(details.organisationId(), search, status, department, PageRequest.of(page, size));
+
+        List<EmployeeResponse> content = employeePage.getContent().stream().map(EmployeeMapper::toResponse).toList();
+
+        EmployeePageResponse response = new EmployeePageResponse(
+                content, employeePage.getTotalElements(), employeePage.getTotalPages(), employeePage.getNumber(), employeePage.getSize());
+
+        return ResponseEntity.ok(response);
     }
 }
