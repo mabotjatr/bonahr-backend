@@ -8,6 +8,8 @@ import za.co.bonalabs.bonahr.dto.organisation.OrganisationMapper;
 import za.co.bonalabs.bonahr.dto.organisation.OrganisationResponse;
 import za.co.bonalabs.bonahr.entity.Organisation;
 import za.co.bonalabs.bonahr.service.OrganisationService;
+import org.springframework.security.core.Authentication;
+import za.co.bonalabs.bonahr.security.JwtAuthenticationDetails;
 
 import java.net.URI;
 import java.util.UUID;
@@ -23,35 +25,23 @@ public class OrganisationController {
     }
 
     @PostMapping
-    public ResponseEntity<OrganisationResponse> createOrganisation(
-            @Valid @RequestBody CreateOrganisationRequest request
-    ) {
+    public ResponseEntity<OrganisationResponse> createOrganisation(@Valid @RequestBody CreateOrganisationRequest request) {
 
-        Organisation organisation =
-                organisationService.createOrganisation(request);
+        Organisation organisation = organisationService.createOrganisation(request);
 
-        OrganisationResponse response =
-                OrganisationMapper.toResponse(organisation);
+        OrganisationResponse response = OrganisationMapper.toResponse(organisation);
 
-        URI location = URI.create(
-                "/api/v1/organisations/" + response.id()
-        );
+        URI location = URI.create("/api/v1/organisations/" + response.id());
 
-        return ResponseEntity
-                .created(location)
-                .body(response);
+        return ResponseEntity.created(location).body(response);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<OrganisationResponse> getOrganisation(
-            @PathVariable UUID id
-    ) {
+    public ResponseEntity<OrganisationResponse> getOrganisation(@PathVariable UUID id, Authentication authentication) {
 
-        Organisation organisation =
-                organisationService.getOrganisation(id);
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
 
-        return ResponseEntity.ok(
-                OrganisationMapper.toResponse(organisation)
-        );
+        Organisation organisation = organisationService.getOrganisation(id, details.organisationId());
+        return ResponseEntity.ok(OrganisationMapper.toResponse(organisation));
     }
 }

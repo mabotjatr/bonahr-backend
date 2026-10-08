@@ -34,13 +34,12 @@ public class OrganisationService {
     }
 
     @Transactional(readOnly = true)
-    public Organisation getOrganisation(UUID id) {
+    public Organisation getOrganisation(UUID id, UUID authenticatedOrganisationId) {
 
-        return organisationRepository.findById(id)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "Organisation not found: " + id
-                        )
-                );
+        if (!id.equals(authenticatedOrganisationId)) {
+            throw new ResourceNotFoundException("Organisation not found: " + id);
+        }
+
+        return organisationRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Organisation not found: " + id));
     }
 }
