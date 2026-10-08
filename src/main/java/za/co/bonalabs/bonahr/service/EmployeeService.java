@@ -6,17 +6,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.dto.employee.CreateEmployeeRequest;
 import za.co.bonalabs.bonahr.dto.employee.UpdateEmployeeRequest;
-import za.co.bonalabs.bonahr.entity.Employee;
-import za.co.bonalabs.bonahr.entity.EmployeeStatus;
+import za.co.bonalabs.bonahr.entity.*;
 import za.co.bonalabs.bonahr.exception.DuplicateResourceException;
 import za.co.bonalabs.bonahr.exception.InvalidEmployeeStatusTransitionException;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
+import za.co.bonalabs.bonahr.repository.EmployeeAuditLogRepository;
 import za.co.bonalabs.bonahr.repository.EmployeeRepository;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 
-import java.util.List;
-import java.util.Locale;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @Transactional
@@ -24,17 +22,26 @@ public class EmployeeService {
 
     private final EmployeeRepository employeeRepository;
     private final OrganisationRepository organisationRepository;
+    private final EmployeeAuditLogRepository employeeAuditLogRepository;
 
-    public EmployeeService(EmployeeRepository employeeRepository, OrganisationRepository organisationRepository) {
+    public EmployeeService(EmployeeRepository employeeRepository, OrganisationRepository organisationRepository,EmployeeAuditLogRepository employeeAuditLogRepository) {
         this.employeeRepository = employeeRepository;
         this.organisationRepository = organisationRepository;
+        this.employeeAuditLogRepository = employeeAuditLogRepository;
     }
 
+    @Transactional
     public Employee createEmployee(UUID organisationId, CreateEmployeeRequest request) {
+        return createEmployee(organisationId, request, null);
+    }
 
-        var organisation = organisationRepository.findById(organisationId).orElseThrow(() -> new ResourceNotFoundException("Organisation not found: " + organisationId));
+    @Transactional
+    public Employee createEmployee(UUID organisationId, CreateEmployeeRequest request, UUID actorUserId) {
+
+        Organisation organisation = organisationRepository.findById(organisationId).orElseThrow(() -> new ResourceNotFoundException("Organisation not found: " + organisationId));
 
         if (employeeRepository.existsByOrganisationIdAndEmployeeNumber(organisationId, request.employeeNumber())) {
+
             throw new DuplicateResourceException("Employee number already exists: " + request.employeeNumber());
         }
 
@@ -45,7 +52,6 @@ public class EmployeeService {
 
         Employee employee = new Employee(organisation, request.employeeNumber(), request.firstName(), request.lastName());
 
-
         employee.setEmail(request.email());
         employee.setJobTitle(request.jobTitle());
         employee.setDepartment(request.department());
@@ -53,7 +59,13 @@ public class EmployeeService {
         employee.setStartDate(request.startDate());
         employee.setPhone(request.phone());
 
-        return employeeRepository.saveAndFlush(employee);
+        Employee savedEmployee = employeeRepository.saveAndFlush(employee);
+
+        EmployeeAuditLog auditLog = new EmployeeAuditLog(organisation, savedEmployee, EmployeeAuditAction.EMPLOYEE_CREATED, actorUserId, null);
+
+        employeeAuditLogRepository.saveAndFlush(auditLog);
+
+        return savedEmployee;
     }
 
     @Transactional(readOnly = true)
@@ -70,15 +82,38 @@ public class EmployeeService {
     }
 
     public Employee updateEmployee(UUID organisationId, UUID employeeId, UpdateEmployeeRequest request) {
+        return updateEmployee(organisationId, employeeId, request, null);
+    }
+
+    public Employee updateEmployee(UUID organisationId, UUID employeeId, UpdateEmployeeRequest request, UUID actorUserId) {
 
         Employee employee = getEmployee(organisationId, employeeId);
 
-        if (request.email() != null && !request.email().isBlank()
+        if (request.email() != null
+                && !request.email().isBlank()
                 && !request.email().equalsIgnoreCase(employee.getEmail())
                 && employeeRepository.existsByOrganisationIdAndEmailIgnoreCase(organisationId, request.email())) {
 
             throw new DuplicateResourceException("Employee email already exists: " + request.email());
         }
+
+        Map<String, Object> changes = new LinkedHashMap<>();
+
+        recordChange(changes, "firstName", employee.getFirstName(), request.firstName());
+
+        recordChange(changes, "lastName", employee.getLastName(), request.lastName());
+
+        recordChange(changes, "email", employee.getEmail(), request.email());
+
+        recordChange(changes, "jobTitle", employee.getJobTitle(), request.jobTitle());
+
+        recordChange(changes, "department", employee.getDepartment(), request.department());
+
+        recordChange(changes, "employmentType", employee.getEmploymentType(), request.employmentType());
+
+        recordChange(changes, "startDate", employee.getStartDate(), request.startDate());
+
+        recordChange(changes, "phone", employee.getPhone(), request.phone());
 
         employee.setFirstName(request.firstName());
         employee.setLastName(request.lastName());
@@ -89,10 +124,37 @@ public class EmployeeService {
         employee.setStartDate(request.startDate());
         employee.setPhone(request.phone());
 
-        return employeeRepository.saveAndFlush(employee);
+        Employee savedEmployee = employeeRepository.saveAndFlush(employee);
+
+        if (!changes.isEmpty()) {
+
+            EmployeeAuditLog auditLog = new EmployeeAuditLog(employee.getOrganisation(), savedEmployee, EmployeeAuditAction.EMPLOYEE_UPDATED, actorUserId, changes);
+
+            employeeAuditLogRepository.saveAndFlush(auditLog);
+        }
+
+        return savedEmployee;
+    }
+
+    private void recordChange(Map<String, Object> changes, String field, Object oldValue, Object newValue) {
+
+        if (Objects.equals(oldValue, newValue)) {
+            return;
+        }
+
+        Map<String, Object> change = new LinkedHashMap<>();
+
+        change.put("from", oldValue);
+        change.put("to", newValue);
+
+        changes.put(field, change);
     }
 
     public Employee updateEmployeeStatus(UUID organisationId, UUID employeeId, EmployeeStatus status) {
+        return updateEmployeeStatus(organisationId, employeeId, status, null);
+    }
+
+    public Employee updateEmployeeStatus(UUID organisationId, UUID employeeId, EmployeeStatus status, UUID actorUserId) {
 
         Employee employee = getEmployee(organisationId, employeeId);
 
@@ -100,9 +162,30 @@ public class EmployeeService {
             throw new InvalidEmployeeStatusTransitionException("Employee termination must use the termination workflow");
         }
 
+        EmployeeStatus previousStatus = employee.getStatus();
+
         employee.setStatus(status);
 
-        return employeeRepository.saveAndFlush(employee);
+        Employee savedEmployee = employeeRepository.saveAndFlush(employee);
+
+        if (previousStatus != status) {
+
+            Map<String, Object> statusChange = new LinkedHashMap<>();
+
+            statusChange.put("from", previousStatus != null ? previousStatus.name() : null);
+
+            statusChange.put("to", status != null ? status.name() : null);
+
+            Map<String, Object> changes = new LinkedHashMap<>();
+
+            changes.put("status", statusChange);
+
+            EmployeeAuditLog auditLog = new EmployeeAuditLog(employee.getOrganisation(), savedEmployee, EmployeeAuditAction.STATUS_CHANGED, actorUserId, changes);
+
+            employeeAuditLogRepository.saveAndFlush(auditLog);
+        }
+
+        return savedEmployee;
     }
 
     @Transactional(readOnly = true)

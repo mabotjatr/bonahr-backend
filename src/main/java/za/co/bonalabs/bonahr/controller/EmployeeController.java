@@ -32,7 +32,7 @@ public class EmployeeController {
 
         JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
 
-        Employee employee = employeeService.createEmployee(details.organisationId(), request);
+        Employee employee = employeeService.createEmployee(details.organisationId(), request, details.userId());
 
         EmployeeResponse response = EmployeeMapper.toResponse(employee);
 
@@ -72,7 +72,7 @@ public class EmployeeController {
 
         JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
 
-        Employee employee = employeeService.updateEmployee(details.organisationId(), id, request);
+        Employee employee = employeeService.updateEmployee(details.organisationId(), id, request, details.userId());
 
         return ResponseEntity.ok(EmployeeMapper.toResponse(employee));
     }
@@ -85,7 +85,7 @@ public class EmployeeController {
 
         JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
 
-        Employee employee = employeeService.updateEmployeeStatus(details.organisationId(), id, request.status());
+        Employee employee = employeeService.updateEmployeeStatus(details.organisationId(), id, request.status(), details.userId());
 
         return ResponseEntity.ok(EmployeeMapper.toResponse(employee));
     }

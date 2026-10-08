@@ -8,18 +8,17 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.dto.employee.CreateEmployeeRequest;
 import za.co.bonalabs.bonahr.dto.employee.UpdateEmployeeRequest;
-import za.co.bonalabs.bonahr.entity.Employee;
-import za.co.bonalabs.bonahr.entity.EmployeeStatus;
-import za.co.bonalabs.bonahr.entity.EmploymentType;
-import za.co.bonalabs.bonahr.entity.Organisation;
+import za.co.bonalabs.bonahr.entity.*;
 import za.co.bonalabs.bonahr.exception.DuplicateResourceException;
 import za.co.bonalabs.bonahr.exception.InvalidEmployeeStatusTransitionException;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
+import za.co.bonalabs.bonahr.repository.EmployeeAuditLogRepository;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -32,6 +31,9 @@ class EmployeeServiceTest {
 
     @Autowired
     private OrganisationRepository organisationRepository;
+
+    @Autowired
+    private EmployeeAuditLogRepository employeeAuditLogRepository;
 
     @Test
     void shouldCreateEmployeeForOrganisation() {
@@ -503,4 +505,124 @@ class EmployeeServiceTest {
         assertEquals(0, page.getNumber());
         assertEquals(2, page.getSize());
     }
+
+    @Test
+    void shouldCreateAuditLogWhenEmployeeIsUpdated() {
+
+        Organisation organisation = new Organisation("Employee Update Audit Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-" + UUID.randomUUID(),
+                "John",
+                "Doe",
+                "john-" + UUID.randomUUID() + "@example.com",
+                "Software Engineer",
+                "Engineering",
+                EmploymentType.PERMANENT,
+                LocalDate.of(2026, 10, 1),
+                "+27 82 123 4567"));
+
+        employeeAuditLogRepository.deleteAll();
+        employeeAuditLogRepository.flush();
+
+        UUID actorUserId = UUID.randomUUID();
+
+        UpdateEmployeeRequest request = new UpdateEmployeeRequest(
+                "Johnny",
+                "Doe", employee.getEmail(),
+                "Senior Software Engineer",
+                "Engineering",
+                EmploymentType.PERMANENT,
+                employee.getStartDate(),
+                employee.getPhone());
+
+        employeeService.updateEmployee(organisation.getId(), employee.getId(), request, actorUserId);
+
+        List<EmployeeAuditLog> auditLogs = employeeAuditLogRepository.findAllByOrganisationIdAndEmployeeIdOrderByCreatedAtDesc(organisation.getId(), employee.getId());
+
+        assertEquals(1, auditLogs.size());
+
+        EmployeeAuditLog auditLog = auditLogs.getFirst();
+
+        assertEquals(EmployeeAuditAction.EMPLOYEE_UPDATED, auditLog.getAction());
+
+        assertEquals(actorUserId, auditLog.getActorUserId());
+
+        assertTrue(auditLog.getChanges().containsKey("firstName"));
+
+        assertTrue(auditLog.getChanges().containsKey("jobTitle"));
+    }
+
+    @Test
+    void shouldCreateAuditLogWhenEmployeeStatusChanges() {
+
+        Organisation organisation = new Organisation("Employee Status Audit Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-" + UUID.randomUUID(),
+                "John",
+                "Doe",
+                "john-" + UUID.randomUUID() + "@example.com"));
+
+        employeeAuditLogRepository.deleteAll();
+        employeeAuditLogRepository.flush();
+
+        UUID actorUserId = UUID.randomUUID();
+
+        employeeService.updateEmployeeStatus(organisation.getId(), employee.getId(), EmployeeStatus.INACTIVE, actorUserId);
+
+        List<EmployeeAuditLog> auditLogs = employeeAuditLogRepository.findAllByOrganisationIdAndEmployeeIdOrderByCreatedAtDesc(organisation.getId(), employee.getId());
+
+        assertEquals(1, auditLogs.size());
+
+        EmployeeAuditLog auditLog = auditLogs.getFirst();
+
+        assertEquals(EmployeeAuditAction.STATUS_CHANGED, auditLog.getAction());
+
+        assertEquals(actorUserId, auditLog.getActorUserId());
+
+        assertTrue(auditLog.getChanges().containsKey("status"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> statusChange = (Map<String, Object>) auditLog.getChanges().get("status");
+
+        assertEquals("ACTIVE", statusChange.get("from"));
+
+        assertEquals("INACTIVE", statusChange.get("to"));
+    }
+
+    @Test
+    void shouldCreateAuditLogWhenEmployeeIsCreated() {
+
+        Organisation organisation = new Organisation("Employee Creation Audit Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        UUID actorUserId = UUID.randomUUID();
+
+        Employee employee = employeeService.createEmployee(organisation.getId(), new CreateEmployeeRequest(
+                "EMP-" + UUID.randomUUID(),
+                "John",
+                "Doe",
+                "john-" + UUID.randomUUID() + "@example.com"), actorUserId);
+
+        List<EmployeeAuditLog> auditLogs = employeeAuditLogRepository.findAllByOrganisationIdAndEmployeeIdOrderByCreatedAtDesc(organisation.getId(), employee.getId());
+
+        assertEquals(1, auditLogs.size());
+
+        EmployeeAuditLog auditLog = auditLogs.getFirst();
+
+        assertEquals(EmployeeAuditAction.EMPLOYEE_CREATED, auditLog.getAction());
+
+        assertEquals(actorUserId, auditLog.getActorUserId());
+
+        assertEquals(employee.getId(), auditLog.getEmployee().getId());
+
+        assertEquals(organisation.getId(), auditLog.getOrganisation().getId());
+    }
+
 }

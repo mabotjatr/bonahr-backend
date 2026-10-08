@@ -1,24 +1,27 @@
 package za.co.bonalabs.bonahr.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
-import za.co.bonalabs.bonahr.entity.EmployeeStatus;
-import za.co.bonalabs.bonahr.entity.EmploymentType;
-import za.co.bonalabs.bonahr.entity.Organisation;
+import za.co.bonalabs.bonahr.entity.*;
+import za.co.bonalabs.bonahr.repository.EmployeeAuditLogRepository;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 import za.co.bonalabs.bonahr.security.JwtService;
-import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.repository.EmployeeRepository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -38,13 +41,23 @@ class EmployeeControllerTest {
     private JwtService jwtService;
 
     @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
     private OrganisationRepository organisationRepository;
 
     @Autowired
     private EmployeeRepository employeeRepository;
 
+    @Autowired
+    private EmployeeAuditLogRepository employeeAuditLogRepository;
+
+    private String createAccessToken(UUID userId, UUID organisationId, List<String> roles) {
+        return jwtService.generateToken(userId, organisationId, roles);
+    }
+
     private String createAccessToken(UUID organisationId, List<String> roles) {
-        return jwtService.generateToken(UUID.randomUUID(), organisationId, roles);
+        return createAccessToken(UUID.randomUUID(), organisationId, roles);
     }
 
     @Test
@@ -810,5 +823,132 @@ class EmployeeControllerTest {
                 .andExpect(jsonPath("$.content[0].id").value(matchingEmployee.getId().toString()))
                 .andExpect(jsonPath("$.content[0].department").value("Engineering"))
                 .andExpect(jsonPath("$.content[0].status").value("ACTIVE"));
+    }
+
+    @Test
+    void shouldRecordAuthenticatedUserWhenEmployeeIsUpdated() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Audit API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee.setEmail("john-" + UUID.randomUUID() + "@example.com");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        UUID actorUserId = UUID.randomUUID();
+
+        String token = createAccessToken(actorUserId, organisation.getId(), List.of("HR_ADMIN"));
+
+        String request = """
+                {
+                    "firstName": "Johnny",
+                    "lastName": "Doe",
+                    "email": "%s"
+                }
+                """.formatted(employee.getEmail());
+
+        mockMvc.perform(put("/api/v1/employees/" + employee.getId())
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isOk());
+
+        List<EmployeeAuditLog> auditLogs = employeeAuditLogRepository.findAllByOrganisationIdAndEmployeeIdOrderByCreatedAtDesc(organisation.getId(), employee.getId());
+
+        assertEquals(1, auditLogs.size());
+
+        EmployeeAuditLog auditLog = auditLogs.getFirst();
+
+        assertEquals(EmployeeAuditAction.EMPLOYEE_UPDATED, auditLog.getAction());
+
+        assertEquals(actorUserId, auditLog.getActorUserId());
+    }
+
+    @Test
+    void shouldRecordAuthenticatedUserWhenEmployeeStatusChanges() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Status Audit API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        UUID actorUserId = UUID.randomUUID();
+
+        String token = createAccessToken(actorUserId, organisation.getId(), List.of("HR_ADMIN"));
+
+        String request = """
+                {
+                    "status": "INACTIVE"
+                }
+                """;
+
+        mockMvc.perform(patch("/api/v1/employees/" + employee.getId() + "/status")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isOk());
+
+        List<EmployeeAuditLog> auditLogs = employeeAuditLogRepository.findAllByOrganisationIdAndEmployeeIdOrderByCreatedAtDesc(organisation.getId(), employee.getId());
+
+        assertEquals(1, auditLogs.size());
+
+        EmployeeAuditLog auditLog = auditLogs.getFirst();
+
+        assertEquals(EmployeeAuditAction.STATUS_CHANGED, auditLog.getAction());
+
+        assertEquals(actorUserId, auditLog.getActorUserId());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> statusChange = (Map<String, Object>) auditLog.getChanges().get("status");
+
+        assertEquals("ACTIVE", statusChange.get("from"));
+
+        assertEquals("INACTIVE", statusChange.get("to"));
+    }
+
+    @Test
+    void shouldRecordAuthenticatedUserWhenEmployeeIsCreated() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Creation Audit API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        UUID actorUserId = UUID.randomUUID();
+
+        String token = createAccessToken(actorUserId, organisation.getId(), List.of("HR_ADMIN"));
+
+        String request = """
+                {
+                    "employeeNumber": "EMP-%s",
+                    "firstName": "John",
+                    "lastName": "Doe",
+                    "email": "john-%s@example.com"
+                }
+                """.formatted(UUID.randomUUID(), UUID.randomUUID());
+
+        MvcResult result = mockMvc.perform(post("/api/v1/employees")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isCreated()).andReturn();
+
+        String responseBody = result.getResponse().getContentAsString();
+
+        JsonNode responseJson = objectMapper.readTree(responseBody);
+
+        UUID employeeId = UUID.fromString(responseJson.get("id").asText());
+
+        List<EmployeeAuditLog> auditLogs = employeeAuditLogRepository.findAllByOrganisationIdAndEmployeeIdOrderByCreatedAtDesc(organisation.getId(), employeeId);
+
+        assertEquals(1, auditLogs.size());
+
+        EmployeeAuditLog auditLog = auditLogs.getFirst();
+
+        assertEquals(EmployeeAuditAction.EMPLOYEE_CREATED, auditLog.getAction());
+
+        assertEquals(actorUserId, auditLog.getActorUserId());
     }
 }
