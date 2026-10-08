@@ -57,6 +57,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, API_V_1_EMPLOYEES)
                         .hasAnyRole(OWNER,HR_ADMIN)
 
+                        .requestMatchers(HttpMethod.DELETE, API_V_1_EMPLOYEES)
+                        .hasAnyRole(OWNER,HR_ADMIN)
+
                         .anyRequest().authenticated()
                 )
 

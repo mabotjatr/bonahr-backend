@@ -1,22 +1,25 @@
 package za.co.bonalabs.bonahr.controller;
 
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import za.co.bonalabs.bonahr.dto.employee.EmployeePageResponse;
 import za.co.bonalabs.bonahr.dto.employee.*;
-import za.co.bonalabs.bonahr.entity.Employee;
-import za.co.bonalabs.bonahr.entity.EmployeeDocument;
-import za.co.bonalabs.bonahr.entity.EmployeeStatus;
+import za.co.bonalabs.bonahr.entity.*;
 import za.co.bonalabs.bonahr.security.JwtAuthenticationDetails;
 import za.co.bonalabs.bonahr.service.EmployeeAuditService;
 import za.co.bonalabs.bonahr.service.EmployeeDocumentService;
 import za.co.bonalabs.bonahr.service.EmployeeService;
-import za.co.bonalabs.bonahr.entity.EmployeeAuditLog;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.io.InputStream;
 
 import java.net.URI;
 import java.util.List;
@@ -161,7 +164,7 @@ public class EmployeeController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/{id}/documents")
+    @PostMapping(value = "/{id}/documents", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<EmployeeDocumentResponse> createEmployeeDocument(
             @PathVariable UUID id,
             @Valid @RequestBody CreateEmployeeDocumentRequest request,
@@ -183,5 +186,76 @@ public class EmployeeController {
                 document.getCreatedAt());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping(value = "/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<EmployeeDocumentResponse> uploadEmployeeDocument(
+            @PathVariable UUID id,
+            @RequestParam EmployeeDocumentType documentType,
+            @RequestPart("file") MultipartFile file,
+            Authentication authentication) throws IOException {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        String fileName = file.getOriginalFilename() == null || file.getOriginalFilename().isBlank() ? "document" : file.getOriginalFilename();
+
+        EmployeeDocument document;
+
+        try (InputStream inputStream = file.getInputStream()) {
+
+            document = employeeDocumentService.uploadEmployeeDocument(
+                    details.organisationId(),
+                    id,
+                    documentType,
+                    fileName,
+                    file.getContentType(),
+                    file.getSize(),
+                    inputStream,
+                    details.userId());
+        }
+
+        EmployeeDocumentResponse response = new EmployeeDocumentResponse(
+                document.getId(),
+                document.getEmployee().getId(),
+                document.getDocumentType(),
+                document.getFileName(),
+                document.getStorageKey(),
+                document.getMimeType(),
+                document.getFileSize(),
+                document.getUploadedByUserId(),
+                document.getCreatedAt());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{employeeId}/documents/{documentId}/download")
+    public ResponseEntity<Resource> downloadEmployeeDocument(@PathVariable UUID employeeId, @PathVariable UUID documentId, Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        EmployeeDocument document = employeeDocumentService.getEmployeeDocument(details.organisationId(), employeeId, documentId);
+
+        InputStream inputStream = employeeDocumentService.loadEmployeeDocument(details.organisationId(), employeeId, documentId);
+
+        Resource resource = new InputStreamResource(inputStream);
+
+        MediaType mediaType = document.getMimeType() == null
+                || document.getMimeType().isBlank()
+                ? MediaType.APPLICATION_OCTET_STREAM
+                : MediaType.parseMediaType(document.getMimeType());
+
+        ContentDisposition contentDisposition = ContentDisposition.attachment().filename(document.getFileName()).build();
+
+        return ResponseEntity.ok().contentType(mediaType).header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString()).body(resource);
+    }
+
+    @DeleteMapping("/{employeeId}/documents/{documentId}")
+    public ResponseEntity<Void> deleteEmployeeDocument(@PathVariable UUID employeeId, @PathVariable UUID documentId, Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        employeeDocumentService.deleteEmployeeDocument(details.organisationId(), employeeId, documentId);
+
+        return ResponseEntity.noContent().build();
     }
 }

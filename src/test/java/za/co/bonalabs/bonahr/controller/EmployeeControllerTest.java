@@ -6,7 +6,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,20 +21,21 @@ import za.co.bonalabs.bonahr.repository.EmployeeRepository;
 import za.co.bonalabs.bonahr.entity.EmployeeDocument;
 import za.co.bonalabs.bonahr.entity.EmployeeDocumentType;
 import za.co.bonalabs.bonahr.repository.EmployeeDocumentRepository;
+import za.co.bonalabs.bonahr.storage.FileStorageService;
+import za.co.bonalabs.bonahr.storage.StoredFile;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -58,6 +62,9 @@ class EmployeeControllerTest {
 
     @Autowired
     private EmployeeDocumentRepository employeeDocumentRepository;
+
+    @MockitoBean
+    private FileStorageService fileStorageService;
 
     private String createAccessToken(UUID userId, UUID organisationId, List<String> roles) {
         return jwtService.generateToken(userId, organisationId, roles);
@@ -1210,5 +1217,302 @@ class EmployeeControllerTest {
                 employee.getId());
 
         assertTrue(documents.isEmpty());
+    }
+
+    @Test
+    void shouldUploadEmployeeDocumentFile() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Multipart Upload Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        UUID actorUserId = UUID.randomUUID();
+
+        String token = createAccessToken(actorUserId, organisation.getId(), List.of("HR_ADMIN"));
+
+        byte[] content = "BonaHR employment contract".getBytes(StandardCharsets.UTF_8);
+
+        MockMultipartFile file = new MockMultipartFile("file", "employment-contract.pdf", "application/pdf", content);
+
+        String generatedStorageKey = "organisations/" + organisation.getId() + "/employees/" + employee.getId() + "/documents/" + UUID.randomUUID() + ".pdf";
+
+        when(fileStorageService.store(
+                eq(organisation.getId()),
+                eq(employee.getId()),
+                eq("employment-contract.pdf"),
+                eq("application/pdf"),
+                eq((long) content.length),
+                any())).thenReturn(new StoredFile(generatedStorageKey, "employment-contract.pdf", "application/pdf", content.length));
+
+        mockMvc.perform(multipart("/api/v1/employees/" + employee.getId() + "/documents").file(file).param("documentType", "EMPLOYMENT_CONTRACT").header("Authorization", "Bearer " + token)).andExpect(status().isCreated()).andExpect(jsonPath("$.employeeId").value(employee.getId().toString())).andExpect(jsonPath("$.documentType").value("EMPLOYMENT_CONTRACT")).andExpect(jsonPath("$.fileName").value("employment-contract.pdf")).andExpect(jsonPath("$.storageKey").value(generatedStorageKey)).andExpect(jsonPath("$.mimeType").value("application/pdf")).andExpect(jsonPath("$.fileSize").value(content.length)).andExpect(jsonPath("$.uploadedByUserId").value(actorUserId.toString()));
+    }
+
+    @Test
+    void shouldDownloadEmployeeDocumentFile() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Document Download API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        String storageKey = "organisations/" + organisation.getId() + "/employees/" + employee.getId() + "/documents/" + UUID.randomUUID() + ".pdf";
+
+        EmployeeDocument document = new EmployeeDocument(
+                organisation,
+                employee,
+                EmployeeDocumentType.EMPLOYMENT_CONTRACT,
+                "employment-contract.pdf",
+                storageKey,
+                "application/pdf",
+                125_000L,
+                UUID.randomUUID());
+
+        document = employeeDocumentRepository.saveAndFlush(document);
+
+        byte[] content = "BonaHR employment contract".getBytes(StandardCharsets.UTF_8);
+
+        when(fileStorageService.load(storageKey)).thenReturn(new ByteArrayInputStream(content));
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/employees/" + employee.getId() + "/documents/" + document.getId() + "/download")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/pdf"))
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"employment-contract.pdf\""))
+                .andExpect(content().bytes(content));
+    }
+
+    @Test
+    void shouldNotAllowOrganisationToDownloadAnotherOrganisationsEmployeeDocument() throws Exception {
+
+        Organisation organisationA = new Organisation("Document Download API Tenant A " + UUID.randomUUID());
+
+        Organisation organisationB = new Organisation("Document Download API Tenant B " + UUID.randomUUID());
+
+        organisationA = organisationRepository.saveAndFlush(organisationA);
+
+        organisationB = organisationRepository.saveAndFlush(organisationB);
+
+        Employee employee = new Employee(organisationA, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        String storageKey = "organisations/" + organisationA.getId() + "/employees/" + employee.getId() + "/documents/" + UUID.randomUUID() + ".pdf";
+
+        EmployeeDocument document = new EmployeeDocument(
+                organisationA,
+                employee,
+                EmployeeDocumentType.ID_DOCUMENT,
+                "id-document.pdf",
+                storageKey,
+                "application/pdf",
+                80_000L,
+                UUID.randomUUID());
+
+        document = employeeDocumentRepository.saveAndFlush(document);
+
+        String organisationBToken = createAccessToken(organisationB.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/employees/" + employee.getId() + "/documents/" + document.getId() + "/download")
+                .header("Authorization", "Bearer " + organisationBToken))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldNotAllowEmployeeToDownloadAnotherEmployeesDocumentWithinSameOrganisation() throws Exception {
+
+        Organisation organisation = new Organisation("Document Download Employee Isolation API " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employeeA = new Employee(organisation, "EMP-A-" + UUID.randomUUID(), "John", "Doe");
+
+        Employee employeeB = new Employee(organisation, "EMP-B-" + UUID.randomUUID(), "Jane", "Smith");
+
+        employeeA = employeeRepository.saveAndFlush(employeeA);
+
+        employeeB = employeeRepository.saveAndFlush(employeeB);
+
+        String storageKey = "organisations/" + organisation.getId() + "/employees/" + employeeB.getId() + "/documents/" + UUID.randomUUID() + ".pdf";
+
+        EmployeeDocument document = new EmployeeDocument(
+                organisation,
+                employeeB,
+                EmployeeDocumentType.ID_DOCUMENT,
+                "id-document.pdf",
+                storageKey,
+                "application/pdf",
+                80_000L,
+                UUID.randomUUID());
+
+        document = employeeDocumentRepository.saveAndFlush(document);
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/employees/" + employeeA.getId() + "/documents/" + document.getId() + "/download")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldDeleteEmployeeDocument() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Document Delete API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        String storageKey = "organisations/" + organisation.getId() + "/employees/" + employee.getId() + "/documents/" + UUID.randomUUID() + ".pdf";
+
+        EmployeeDocument document = new EmployeeDocument(
+                organisation,
+                employee,
+                EmployeeDocumentType.ID_DOCUMENT,
+                "id-document.pdf",
+                storageKey,
+                "application/pdf",
+                80_000L,
+                UUID.randomUUID());
+
+        document = employeeDocumentRepository.saveAndFlush(document);
+
+        UUID documentId = document.getId();
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(delete("/api/v1/employees/" + employee.getId() + "/documents/" + documentId)
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNoContent());
+
+        assertFalse(employeeDocumentRepository.existsById(documentId));
+
+        verify(fileStorageService).delete(storageKey);
+    }
+
+    @Test
+    void shouldForbidEmployeeRoleFromDeletingEmployeeDocument() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Document Delete Security Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        String storageKey = "organisations/" + organisation.getId() + "/employees/" + employee.getId() + "/documents/" + UUID.randomUUID() + ".pdf";
+
+        EmployeeDocument document = new EmployeeDocument(
+                organisation,
+                employee,
+                EmployeeDocumentType.ID_DOCUMENT,
+                "id-document.pdf",
+                storageKey,
+                "application/pdf",
+                80_000L,
+                UUID.randomUUID());
+
+        document = employeeDocumentRepository.saveAndFlush(document);
+
+        String token = createAccessToken(organisation.getId(), List.of("EMPLOYEE"));
+
+        mockMvc.perform(delete("/api/v1/employees/" + employee.getId() + "/documents/" + document.getId())
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldNotAllowOrganisationToDeleteAnotherOrganisationsEmployeeDocument() throws Exception {
+
+        Organisation organisationA = new Organisation("Document Delete API Tenant A " + UUID.randomUUID());
+
+        Organisation organisationB = new Organisation("Document Delete API Tenant B " + UUID.randomUUID());
+
+        organisationA = organisationRepository.saveAndFlush(organisationA);
+
+        organisationB = organisationRepository.saveAndFlush(organisationB);
+
+        Employee employee = new Employee(organisationA, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        String storageKey = "organisations/" + organisationA.getId() + "/employees/" + employee.getId() + "/documents/" + UUID.randomUUID() + ".pdf";
+
+        EmployeeDocument document = new EmployeeDocument(
+                organisationA,
+                employee,
+                EmployeeDocumentType.ID_DOCUMENT,
+                "id-document.pdf",
+                storageKey,
+                "application/pdf",
+                80_000L,
+                UUID.randomUUID());
+
+        document = employeeDocumentRepository.saveAndFlush(document);
+
+        UUID documentId = document.getId();
+
+        String organisationBToken = createAccessToken(organisationB.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(delete("/api/v1/employees/" + employee.getId() + "/documents/" + documentId)
+                .header("Authorization", "Bearer " + organisationBToken))
+                .andExpect(status().isNotFound());
+
+        assertTrue(employeeDocumentRepository.existsById(documentId));
+
+        verify(fileStorageService, never()).delete(storageKey);
+    }
+
+    @Test
+    void shouldNotAllowEmployeeToDeleteAnotherEmployeesDocumentWithinSameOrganisation() throws Exception {
+
+        Organisation organisation = new Organisation("Document Delete Employee Isolation API " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employeeA = new Employee(organisation, "EMP-A-" + UUID.randomUUID(), "John", "Doe");
+
+        Employee employeeB = new Employee(organisation, "EMP-B-" + UUID.randomUUID(), "Jane", "Smith");
+
+        employeeA = employeeRepository.saveAndFlush(employeeA);
+
+        employeeB = employeeRepository.saveAndFlush(employeeB);
+
+        String storageKey = "organisations/" + organisation.getId() + "/employees/" + employeeB.getId() + "/documents/" + UUID.randomUUID() + ".pdf";
+
+        EmployeeDocument document = new EmployeeDocument(
+                organisation,
+                employeeB,
+                EmployeeDocumentType.ID_DOCUMENT,
+                "id-document.pdf",
+                storageKey,
+                "application/pdf",
+                80_000L,
+                UUID.randomUUID());
+
+        document = employeeDocumentRepository.saveAndFlush(document);
+
+        UUID documentId = document.getId();
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(delete("/api/v1/employees/" + employeeA.getId() + "/documents/" + documentId)
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+
+        assertTrue(employeeDocumentRepository.existsById(documentId));
+
+        verify(fileStorageService, never()).delete(storageKey);
     }
 }
