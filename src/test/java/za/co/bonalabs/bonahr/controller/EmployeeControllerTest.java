@@ -951,4 +951,67 @@ class EmployeeControllerTest {
 
         assertEquals(actorUserId, auditLog.getActorUserId());
     }
+
+    @Test
+    void shouldReturnEmployeeAuditHistoryForAuthenticatedOrganisation() throws Exception {
+
+        Organisation organisation = new Organisation("Employee Audit History API Company " + UUID.randomUUID());
+
+        organisation = organisationRepository.saveAndFlush(organisation);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        UUID actorUserId = UUID.randomUUID();
+
+        EmployeeAuditLog auditLog = new EmployeeAuditLog(
+                organisation,
+                employee,
+                EmployeeAuditAction.EMPLOYEE_UPDATED,
+                actorUserId,
+                Map.of("jobTitle", Map.of("from", "Developer", "to", "Senior Developer")));
+
+        employeeAuditLogRepository.saveAndFlush(auditLog);
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/employees/" + employee.getId() + "/audit")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(auditLog.getId().toString()))
+                .andExpect(jsonPath("$[0].employeeId").value(employee.getId().toString()))
+                .andExpect(jsonPath("$[0].action").value("EMPLOYEE_UPDATED"))
+                .andExpect(jsonPath("$[0].actorUserId").value(actorUserId.toString()))
+                .andExpect(jsonPath("$[0].changes.jobTitle.from").value("Developer"))
+                .andExpect(jsonPath("$[0].changes.jobTitle.to").value("Senior Developer"))
+                .andExpect(jsonPath("$[0].createdAt").exists());
+    }
+
+    @Test
+    void shouldNotAllowOrganisationToAccessAnotherOrganisationsEmployeeAuditHistory() throws Exception {
+
+        Organisation organisationA = new Organisation("Audit API Tenant A " + UUID.randomUUID());
+
+        Organisation organisationB = new Organisation("Audit API Tenant B " + UUID.randomUUID());
+
+        organisationA = organisationRepository.saveAndFlush(organisationA);
+
+        organisationB = organisationRepository.saveAndFlush(organisationB);
+
+        Employee employee = new Employee(organisationA, "EMP-" + UUID.randomUUID(), "John", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        EmployeeAuditLog auditLog = new EmployeeAuditLog(organisationA, employee, EmployeeAuditAction.EMPLOYEE_CREATED, UUID.randomUUID(), null);
+
+        employeeAuditLogRepository.saveAndFlush(auditLog);
+
+        String organisationBToken = createAccessToken(organisationB.getId(), List.of("HR_ADMIN"));
+
+        mockMvc.perform(get("/api/v1/employees/" + employee.getId() + "/audit")
+                .header("Authorization", "Bearer " + organisationBToken))
+                .andExpect(status().isNotFound());
+    }
 }

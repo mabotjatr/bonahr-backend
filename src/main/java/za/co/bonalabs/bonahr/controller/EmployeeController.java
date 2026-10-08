@@ -11,7 +11,9 @@ import za.co.bonalabs.bonahr.dto.employee.*;
 import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.entity.EmployeeStatus;
 import za.co.bonalabs.bonahr.security.JwtAuthenticationDetails;
+import za.co.bonalabs.bonahr.service.EmployeeAuditService;
 import za.co.bonalabs.bonahr.service.EmployeeService;
+import za.co.bonalabs.bonahr.entity.EmployeeAuditLog;
 
 import java.net.URI;
 import java.util.List;
@@ -22,9 +24,11 @@ import java.util.UUID;
 public class EmployeeController {
 
     private final EmployeeService employeeService;
+    private final EmployeeAuditService employeeAuditService;
 
-    public EmployeeController(EmployeeService employeeService) {
+    public EmployeeController(EmployeeService employeeService, EmployeeAuditService employeeAuditService) {
         this.employeeService = employeeService;
+        this.employeeAuditService = employeeAuditService;
     }
 
     @PostMapping
@@ -106,6 +110,25 @@ public class EmployeeController {
 
         EmployeePageResponse response = new EmployeePageResponse(
                 content, employeePage.getTotalElements(), employeePage.getTotalPages(), employeePage.getNumber(), employeePage.getSize());
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/audit")
+    public ResponseEntity<List<EmployeeAuditResponse>> getEmployeeAuditHistory(@PathVariable UUID id, Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        List<EmployeeAuditLog> auditLogs = employeeAuditService.getEmployeeAuditHistory(details.organisationId(), id);
+
+        List<EmployeeAuditResponse> response = auditLogs.stream().map(auditLog ->
+                new EmployeeAuditResponse(
+                        auditLog.getId(),
+                        auditLog.getEmployee().getId(),
+                        auditLog.getAction(),
+                        auditLog.getActorUserId(),
+                        auditLog.getChanges(),
+                        auditLog.getCreatedAt())).toList();
 
         return ResponseEntity.ok(response);
     }
