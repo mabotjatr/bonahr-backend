@@ -6,7 +6,6 @@ import za.co.bonalabs.bonahr.entity.EmployeeDocument;
 import za.co.bonalabs.bonahr.entity.EmployeeDocumentType;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 import za.co.bonalabs.bonahr.repository.EmployeeDocumentRepository;
-import za.co.bonalabs.bonahr.dto.employee.CreateEmployeeDocumentRequest;
 import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.storage.FileStorageService;
 import za.co.bonalabs.bonahr.storage.StoredFile;
@@ -26,24 +25,6 @@ public class EmployeeDocumentService {
         this.employeeService = employeeService;
         this.employeeDocumentRepository = employeeDocumentRepository;
         this.fileStorageService = fileStorageService;
-    }
-
-    @Transactional
-    public EmployeeDocument createEmployeeDocument(UUID organisationId, UUID employeeId, CreateEmployeeDocumentRequest request, UUID uploadedByUserId) {
-
-        Employee employee = employeeService.getEmployee(organisationId, employeeId);
-
-        EmployeeDocument document = new EmployeeDocument(
-                employee.getOrganisation(),
-                employee,
-                request.documentType(),
-                request.fileName(),
-                request.storageKey(),
-                request.mimeType(),
-                request.fileSize(),
-                uploadedByUserId);
-
-        return employeeDocumentRepository.saveAndFlush(document);
     }
 
     @Transactional(readOnly = true)

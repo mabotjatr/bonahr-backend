@@ -164,30 +164,6 @@ public class EmployeeController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping(value = "/{id}/documents", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<EmployeeDocumentResponse> createEmployeeDocument(
-            @PathVariable UUID id,
-            @Valid @RequestBody CreateEmployeeDocumentRequest request,
-            Authentication authentication) {
-
-        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
-
-        EmployeeDocument document = employeeDocumentService.createEmployeeDocument(details.organisationId(), id, request, details.userId());
-
-        EmployeeDocumentResponse response = new EmployeeDocumentResponse(
-                document.getId(),
-                document.getEmployee().getId(),
-                document.getDocumentType(),
-                document.getFileName(),
-                document.getStorageKey(),
-                document.getMimeType(),
-                document.getFileSize(),
-                document.getUploadedByUserId(),
-                document.getCreatedAt());
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
     @PostMapping(value = "/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<EmployeeDocumentResponse> uploadEmployeeDocument(
             @PathVariable UUID id,

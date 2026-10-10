@@ -1107,9 +1107,9 @@ class EmployeeControllerTest {
     }
 
     @Test
-    void shouldCreateEmployeeDocumentUsingAuthenticatedUser() throws Exception {
+    void shouldRejectJsonEmployeeDocumentCreation() throws Exception {
 
-        Organisation organisation = new Organisation("Employee Document Creation API Company " + UUID.randomUUID());
+        Organisation organisation = new Organisation("Employee JSON Document Rejection Company " + UUID.randomUUID());
 
         organisation = organisationRepository.saveAndFlush(organisation);
 
@@ -1117,34 +1117,22 @@ class EmployeeControllerTest {
 
         employee = employeeRepository.saveAndFlush(employee);
 
-        UUID actorUserId = UUID.randomUUID();
-
-        String token = createAccessToken(actorUserId, organisation.getId(), List.of("HR_ADMIN"));
-
-        String storageKey = "employees/" + employee.getId() + "/" + UUID.randomUUID() + ".pdf";
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
 
         String request = """
                 {
                     "documentType": "EMPLOYMENT_CONTRACT",
                     "fileName": "employment-contract.pdf",
-                    "storageKey": "%s",
+                    "storageKey": "client-controlled/path/file.pdf",
                     "mimeType": "application/pdf",
                     "fileSize": 125000
                 }
-                """.formatted(storageKey);
+                """;
 
         mockMvc.perform(post("/api/v1/employees/" + employee.getId() + "/documents")
                 .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(request)).andExpect(status().isCreated())
-                .andExpect(jsonPath("$.employeeId").value(employee.getId().toString()))
-                .andExpect(jsonPath("$.documentType").value("EMPLOYMENT_CONTRACT"))
-                .andExpect(jsonPath("$.fileName").value("employment-contract.pdf"))
-                .andExpect(jsonPath("$.storageKey").value(storageKey))
-                .andExpect(jsonPath("$.mimeType").value("application/pdf"))
-                .andExpect(jsonPath("$.fileSize").value(125000))
-                .andExpect(jsonPath("$.uploadedByUserId").value(actorUserId.toString()))
-                .andExpect(jsonPath("$.createdAt").exists());
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isUnsupportedMediaType());
     }
 
     @Test
@@ -1196,27 +1184,21 @@ class EmployeeControllerTest {
 
         String token = createAccessToken(organisationB.getId(), List.of("HR_ADMIN"));
 
-        String request = """
-                {
-                    "documentType": "ID_DOCUMENT",
-                    "fileName": "id-document.pdf",
-                    "storageKey": "employees/%s/%s.pdf",
-                    "mimeType": "application/pdf",
-                    "fileSize": 80000
-                }
-                """.formatted(employee.getId(), UUID.randomUUID());
+        byte[] content = "BonaHR ID document".getBytes(StandardCharsets.UTF_8);
 
-        mockMvc.perform(post("/api/v1/employees/" + employee.getId() + "/documents")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                        .content(request))
+        MockMultipartFile file = new MockMultipartFile("file", "id-document.pdf", "application/pdf", content);
+
+        mockMvc.perform(multipart("/api/v1/employees/" + employee.getId() + "/documents").file(file)
+                .param("documentType", "ID_DOCUMENT")
+                .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
 
         List<EmployeeDocument> documents = employeeDocumentRepository.findAllByOrganisationIdAndEmployeeIdOrderByCreatedAtDesc(
-                organisationA.getId(),
-                employee.getId());
+                organisationA.getId(), employee.getId());
 
         assertTrue(documents.isEmpty());
+
+        verify(fileStorageService, never()).store(any(), any(), any(), any(), anyLong(), any());
     }
 
     @Test
