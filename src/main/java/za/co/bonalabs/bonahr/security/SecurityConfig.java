@@ -15,6 +15,8 @@ public class SecurityConfig {
     public static final String OWNER = "OWNER";
     public static final String HR_ADMIN = "HR_ADMIN";
     public static final String API_V_1_ORGANISATIONS = "/api/v1/organisations";
+    public static final String API_V_1_LEAVE_TYPES_POST = "/api/v1/leave-types";
+    public static final String API_V_1_LEAVE_TYPES_UPDATE = "/api/v1/leave-types/**";
 
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter(
@@ -58,6 +60,15 @@ public class SecurityConfig {
                         .hasAnyRole(OWNER,HR_ADMIN)
 
                         .requestMatchers(HttpMethod.DELETE, API_V_1_EMPLOYEES)
+                        .hasAnyRole(OWNER,HR_ADMIN)
+
+                        .requestMatchers( HttpMethod.POST, API_V_1_LEAVE_TYPES_POST)
+                        .hasAnyRole(OWNER,HR_ADMIN)
+
+                        .requestMatchers( HttpMethod.PUT, API_V_1_LEAVE_TYPES_UPDATE)
+                        .hasAnyRole(OWNER,HR_ADMIN)
+
+                        .requestMatchers( HttpMethod.PATCH, API_V_1_LEAVE_TYPES_UPDATE)
                         .hasAnyRole(OWNER,HR_ADMIN)
 
                         .anyRequest().authenticated()
