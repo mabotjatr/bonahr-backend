@@ -1,5 +1,6 @@
 package za.co.bonalabs.bonahr.controller;
 
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
@@ -16,6 +17,7 @@ import za.co.bonalabs.bonahr.repository.LeaveTypeRepository;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 import za.co.bonalabs.bonahr.security.JwtService;
 import za.co.bonalabs.bonahr.service.LeaveRequestService;
+import za.co.bonalabs.bonahr.service.LeaveBalanceService;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -28,6 +30,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class LeaveRequestControllerTest {
+
+    @MockitoBean
+    private LeaveBalanceService leaveBalanceService;
 
     @Autowired
     private JwtService jwtService;

@@ -1,29 +1,34 @@
 package za.co.bonalabs.bonahr.service;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.dto.leave.CreateLeaveRequestRequest;
-import za.co.bonalabs.bonahr.entity.Employee;
-import za.co.bonalabs.bonahr.entity.LeaveRequest;
-import za.co.bonalabs.bonahr.entity.LeaveRequestStatus;
-import za.co.bonalabs.bonahr.entity.LeaveType;
-import za.co.bonalabs.bonahr.entity.Organisation;
+import za.co.bonalabs.bonahr.entity.*;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 import za.co.bonalabs.bonahr.repository.EmployeeRepository;
 import za.co.bonalabs.bonahr.repository.LeaveTypeRepository;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest
 @Transactional
 class LeaveRequestServiceTest {
+
+    @MockitoBean
+    private LeaveBalanceService leaveBalanceService;
 
     @Autowired
     private LeaveRequestService leaveRequestService;
@@ -444,7 +449,9 @@ class LeaveRequestServiceTest {
                         LocalDate.of(2026, 12, 11),
                         "December leave"));
 
-        LeaveRequest cancelled = leaveRequestService.cancelLeaveRequest(organisation.getId(), leaveRequest.getId());
+        UUID cancelledByUserId = UUID.randomUUID();
+
+        LeaveRequest cancelled = leaveRequestService.cancelLeaveRequest(organisation.getId(), leaveRequest.getId(), cancelledByUserId);
 
         assertEquals(LeaveRequestStatus.CANCELLED, cancelled.getStatus());
     }
@@ -470,7 +477,9 @@ class LeaveRequestServiceTest {
 
         leaveRequestService.approveLeaveRequest(organisation.getId(), leaveRequest.getId(), UUID.randomUUID(), "Approved");
 
-        assertThrows(IllegalStateException.class, () -> leaveRequestService.cancelLeaveRequest(organisation.getId(), leaveRequest.getId()));
+        UUID cancelledByUserId = UUID.randomUUID();
+
+        assertThrows(IllegalStateException.class, () -> leaveRequestService.cancelLeaveRequest(organisation.getId(), leaveRequest.getId(), cancelledByUserId));
     }
 
     @Test
@@ -494,6 +503,113 @@ class LeaveRequestServiceTest {
 
         leaveRequestService.rejectLeaveRequest(organisation.getId(), leaveRequest.getId(), UUID.randomUUID(), "Rejected");
 
-        assertThrows(IllegalStateException.class, () -> leaveRequestService.cancelLeaveRequest(organisation.getId(), leaveRequest.getId()));
+        UUID cancelledByUserId = UUID.randomUUID();
+
+        assertThrows(IllegalStateException.class, () -> leaveRequestService.cancelLeaveRequest(organisation.getId(), leaveRequest.getId(), cancelledByUserId));
+    }
+
+    @Test
+    void shouldReserveLeaveBalanceWhenCreatingLeaveRequest() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Leave Balance Integration Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL-" + UUID.randomUUID(), "Annual Leave", true, true));
+
+        UUID requestedByUserId = UUID.randomUUID();
+
+        CreateLeaveRequestRequest request = new CreateLeaveRequestRequest(employee.getId(), leaveType.getId(), LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 11), "Annual leave");
+
+        LeaveRequest result = leaveRequestService.createLeaveRequest(organisation.getId(), requestedByUserId, request);
+
+        verify(leaveBalanceService).reserveLeaveDays(organisation.getId(), result, new BigDecimal("2"), requestedByUserId);
+    }
+
+    @Test
+    void shouldDeductReservedBalanceWhenApprovingLeaveRequest() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Leave Approval Balance Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(
+                new LeaveType(
+                        organisation,
+                        "ANNUAL-" + UUID.randomUUID(),
+                        "Annual Leave",
+                        true,
+                        true));
+
+        UUID requestedByUserId = UUID.randomUUID();
+
+        UUID decidedByUserId = UUID.randomUUID();
+
+        CreateLeaveRequestRequest request = new CreateLeaveRequestRequest(
+                employee.getId(),
+                leaveType.getId(),
+                LocalDate.of(2026, 11, 10),
+                LocalDate.of(2026, 11, 11),
+                "Annual leave");
+
+        LeaveRequest leaveRequest = leaveRequestService.createLeaveRequest(organisation.getId(), requestedByUserId, request);
+
+        leaveRequestService.approveLeaveRequest(organisation.getId(), leaveRequest.getId(), decidedByUserId, "Approved");
+
+        verify(leaveBalanceService).approveLeaveDays(organisation.getId(), leaveRequest, new BigDecimal("2"), decidedByUserId);
+    }
+
+    @Test
+    void shouldReleaseReservedBalanceWhenRejectingLeaveRequest() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Leave Rejection Balance Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL-" + UUID.randomUUID(), "Annual Leave", true, true));
+
+        UUID requestedByUserId = UUID.randomUUID();
+
+        UUID decidedByUserId = UUID.randomUUID();
+
+        CreateLeaveRequestRequest request = new CreateLeaveRequestRequest(
+                employee.getId(),
+                leaveType.getId(),
+                LocalDate.of(2026, 11, 10),
+                LocalDate.of(2026, 11, 11),
+                "Annual leave");
+
+        LeaveRequest leaveRequest = leaveRequestService.createLeaveRequest(organisation.getId(), requestedByUserId, request);
+
+        leaveRequestService.rejectLeaveRequest(organisation.getId(), leaveRequest.getId(), decidedByUserId, "Not approved");
+
+        verify(leaveBalanceService).releaseLeaveDays(organisation.getId(), leaveRequest, new BigDecimal("2"), decidedByUserId);
+    }
+
+    @Test
+    void shouldReleaseReservedBalanceWhenCancellingLeaveRequest() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Leave Cancellation Balance Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL-" + UUID.randomUUID(), "Annual Leave", true, true));
+
+        UUID requestedByUserId = UUID.randomUUID();
+
+        UUID cancelledByUserId = UUID.randomUUID();
+
+        CreateLeaveRequestRequest request = new CreateLeaveRequestRequest(
+                employee.getId(),
+                leaveType.getId(),
+                LocalDate.of(2026, 11, 10),
+                LocalDate.of(2026, 11, 11),
+                "Annual leave");
+
+        LeaveRequest leaveRequest = leaveRequestService.createLeaveRequest(organisation.getId(), requestedByUserId, request);
+
+        leaveRequestService.cancelLeaveRequest(organisation.getId(), leaveRequest.getId(), cancelledByUserId);
+
+        verify(leaveBalanceService).releaseLeaveDays(organisation.getId(), leaveRequest, new BigDecimal("2"), cancelledByUserId);
     }
 }

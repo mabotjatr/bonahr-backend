@@ -80,7 +80,7 @@ public class LeaveRequestController {
 
         JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
 
-        LeaveRequest leaveRequest = leaveRequestService.cancelLeaveRequest(details.organisationId(), id);
+        LeaveRequest leaveRequest = leaveRequestService.cancelLeaveRequest(details.organisationId(), id, details.userId());
 
         return ResponseEntity.ok(toResponse(leaveRequest));
     }

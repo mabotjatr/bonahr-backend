@@ -9,6 +9,9 @@ import za.co.bonalabs.bonahr.entity.LeaveType;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 import za.co.bonalabs.bonahr.repository.LeaveRequestRepository;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,13 +21,17 @@ public class LeaveRequestService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final EmployeeService employeeService;
     private final LeaveTypeService leaveTypeService;
+    private final LeaveBalanceService leaveBalanceService;
 
-    public LeaveRequestService(LeaveRequestRepository leaveRequestRepository, EmployeeService employeeService, LeaveTypeService leaveTypeService) {
+    public LeaveRequestService(
+            LeaveRequestRepository leaveRequestRepository,
+            EmployeeService employeeService,
+            LeaveTypeService leaveTypeService,
+            LeaveBalanceService leaveBalanceService) {
         this.leaveRequestRepository = leaveRequestRepository;
-
         this.employeeService = employeeService;
-
         this.leaveTypeService = leaveTypeService;
+        this.leaveBalanceService = leaveBalanceService;
     }
 
     @Transactional
@@ -51,7 +58,13 @@ public class LeaveRequestService {
                 request.reason(),
                 requestedByUserId);
 
-        return leaveRequestRepository.saveAndFlush(leaveRequest);
+        LeaveRequest savedLeaveRequest = leaveRequestRepository.saveAndFlush(leaveRequest);
+
+        BigDecimal requestedDays = calculateRequestedDays(request.startDate(), request.endDate());
+
+        leaveBalanceService.reserveLeaveDays(organisationId, savedLeaveRequest, requestedDays, requestedByUserId);
+
+        return savedLeaveRequest;
     }
 
     @Transactional(readOnly = true)
@@ -72,7 +85,13 @@ public class LeaveRequestService {
 
         leaveRequest.approve(decidedByUserId, decisionComment);
 
-        return leaveRequestRepository.saveAndFlush(leaveRequest);
+        LeaveRequest savedLeaveRequest = leaveRequestRepository.saveAndFlush(leaveRequest);
+
+        BigDecimal requestedDays = calculateRequestedDays(leaveRequest.getStartDate(), leaveRequest.getEndDate());
+
+        leaveBalanceService.approveLeaveDays(organisationId, leaveRequest, requestedDays, decidedByUserId);
+
+        return savedLeaveRequest;
     }
 
     @Transactional
@@ -82,16 +101,35 @@ public class LeaveRequestService {
 
         leaveRequest.reject(decidedByUserId, decisionComment);
 
-        return leaveRequestRepository.saveAndFlush(leaveRequest);
+        LeaveRequest savedLeaveRequest = leaveRequestRepository.saveAndFlush(leaveRequest);
+
+        BigDecimal requestedDays = calculateRequestedDays(leaveRequest.getStartDate(), leaveRequest.getEndDate());
+
+        leaveBalanceService.releaseLeaveDays(organisationId, leaveRequest, requestedDays, decidedByUserId);
+
+        return savedLeaveRequest;
     }
 
     @Transactional
-    public LeaveRequest cancelLeaveRequest(UUID organisationId, UUID leaveRequestId) {
+    public LeaveRequest cancelLeaveRequest(UUID organisationId, UUID leaveRequestId, UUID cancelledByUserId) {
 
         LeaveRequest leaveRequest = getLeaveRequest(organisationId, leaveRequestId);
 
         leaveRequest.cancel();
 
-        return leaveRequestRepository.saveAndFlush(leaveRequest);
+        LeaveRequest savedLeaveRequest = leaveRequestRepository.saveAndFlush(leaveRequest);
+
+        BigDecimal requestedDays = calculateRequestedDays(leaveRequest.getStartDate(), leaveRequest.getEndDate());
+
+        leaveBalanceService.releaseLeaveDays(organisationId, leaveRequest, requestedDays, cancelledByUserId);
+
+        return savedLeaveRequest;
+    }
+
+    private BigDecimal calculateRequestedDays(LocalDate startDate, LocalDate endDate) {
+
+        long days = ChronoUnit.DAYS.between(startDate, endDate) + 1;
+
+        return BigDecimal.valueOf(days);
     }
 }
