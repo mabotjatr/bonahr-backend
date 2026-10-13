@@ -64,6 +64,15 @@ public class LeaveRequestService {
 
         leaveBalanceService.reserveLeaveDays(organisationId, savedLeaveRequest, requestedDays, requestedByUserId);
 
+        if (!leaveType.isRequiresApproval()) {
+
+            savedLeaveRequest.approve(requestedByUserId, "Automatically approved because approval is not required");
+
+            savedLeaveRequest = leaveRequestRepository.saveAndFlush(savedLeaveRequest);
+
+            leaveBalanceService.approveLeaveDays(organisationId, savedLeaveRequest, requestedDays, requestedByUserId);
+        }
+
         return savedLeaveRequest;
     }
 

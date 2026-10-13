@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 @SpringBootTest
 @Transactional
@@ -77,6 +77,8 @@ class LeaveRequestServiceTest {
         assertEquals("Family holiday", result.getReason());
 
         assertEquals(requestedByUserId, result.getRequestedByUserId());
+
+        verify(leaveBalanceService, never()).approveLeaveDays(eq(organisation.getId()), any(LeaveRequest.class), any(BigDecimal.class), eq(requestedByUserId));
     }
 
     @Test
@@ -611,5 +613,27 @@ class LeaveRequestServiceTest {
         leaveRequestService.cancelLeaveRequest(organisation.getId(), leaveRequest.getId(), cancelledByUserId);
 
         verify(leaveBalanceService).releaseLeaveDays(organisation.getId(), leaveRequest, new BigDecimal("2"), cancelledByUserId);
+    }
+
+    @Test
+    void shouldAutomaticallyApproveLeaveRequestWhenApprovalIsNotRequired() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Auto Approval Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "SPECIAL", "Special Leave", true, false));
+
+        UUID requestedByUserId = UUID.randomUUID();
+
+        CreateLeaveRequestRequest request = new CreateLeaveRequestRequest(employee.getId(), leaveType.getId(), LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 6), "Special leave");
+
+        LeaveRequest result = leaveRequestService.createLeaveRequest(organisation.getId(), requestedByUserId, request);
+
+        assertEquals(LeaveRequestStatus.APPROVED, result.getStatus());
+
+        verify(leaveBalanceService).reserveLeaveDays(eq(organisation.getId()), eq(result), eq(BigDecimal.valueOf(5)), eq(requestedByUserId));
+
+        verify(leaveBalanceService).approveLeaveDays(eq(organisation.getId()), eq(result), eq(BigDecimal.valueOf(5)), eq(requestedByUserId));
     }
 }
