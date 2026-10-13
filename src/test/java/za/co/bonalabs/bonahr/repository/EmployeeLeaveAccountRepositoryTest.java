@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.entity.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -97,5 +98,33 @@ class EmployeeLeaveAccountRepositoryTest {
         var result = employeeLeaveAccountRepository.findByOrganisationIdAndEmployeeIdAndLeaveTypeId(organisationB.getId(), employee.getId(), leaveType.getId());
 
         assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void shouldReturnOnlyActiveEmployeesForMonthlyAccrual() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Monthly Accrual Repository Company " + UUID.randomUUID()));
+
+        Employee activeEmployee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-ACTIVE", "Active", "Employee"));
+
+        Employee inactiveEmployee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-INACTIVE", "Inactive", "Employee"));
+
+        inactiveEmployee.setStatus(EmployeeStatus.INACTIVE);
+
+        employeeRepository.saveAndFlush(inactiveEmployee);
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        LeavePolicy policy = leavePolicyRepository.saveAndFlush(new LeavePolicy(organisation, leaveType, LeaveAccrualMethod.MONTHLY, new BigDecimal("1.2500"), false, BigDecimal.ZERO));
+
+        employeeLeaveAccountRepository.saveAndFlush(new EmployeeLeaveAccount(organisation, activeEmployee, leaveType, policy));
+
+        employeeLeaveAccountRepository.saveAndFlush(new EmployeeLeaveAccount(organisation, inactiveEmployee, leaveType, policy));
+
+        List<EmployeeLeaveAccount> result = employeeLeaveAccountRepository.findAllByLeavePolicyAccrualMethodAndLeavePolicyActiveTrueAndEmployeeStatus(LeaveAccrualMethod.MONTHLY, EmployeeStatus.ACTIVE);
+
+        assertEquals(1, result.size());
+
+        assertEquals("EMP-ACTIVE", result.get(0).getEmployee().getEmployeeNumber());
     }
 }

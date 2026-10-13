@@ -1,6 +1,7 @@
 package za.co.bonalabs.bonahr.service;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.entity.EmployeeLeaveAccount;
 import za.co.bonalabs.bonahr.entity.LeaveBalanceTransaction;
@@ -28,7 +29,7 @@ public class LeaveBalanceService {
         this.leaveBalanceTransactionRepository = leaveBalanceTransactionRepository;
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void applyAccrual(UUID organisationId, UUID accountId, BigDecimal amount, LocalDate accrualDate, UUID actorUserId) {
 
         EmployeeLeaveAccount account = getLeaveAccount(organisationId, accountId);
