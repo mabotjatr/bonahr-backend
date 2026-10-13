@@ -13,6 +13,7 @@ import za.co.bonalabs.bonahr.repository.LeaveBalanceTransactionRepository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -622,5 +623,31 @@ class LeaveBalanceServiceTest {
         verify(account).releaseReservedDays(new BigDecimal("2.0000"));
 
         verify(employeeLeaveAccountRepository).saveAndFlush(account);
+    }
+
+    @Test
+    void shouldReturnTransactionsForLeaveAccount() {
+
+        UUID organisationId = UUID.randomUUID();
+
+        UUID accountId = UUID.randomUUID();
+
+        EmployeeLeaveAccount account = mock(EmployeeLeaveAccount.class);
+
+        LeaveBalanceTransaction accrual = mock(LeaveBalanceTransaction.class);
+
+        LeaveBalanceTransaction adjustment = mock(LeaveBalanceTransaction.class);
+
+        when(employeeLeaveAccountRepository.findByIdAndOrganisationId(accountId, organisationId)).thenReturn(Optional.of(account));
+
+        when(leaveBalanceTransactionRepository.findAllByOrganisationIdAndLeaveAccountIdOrderByCreatedAtAsc(organisationId, accountId)).thenReturn(List.of(accrual, adjustment));
+
+        List<LeaveBalanceTransaction> result = leaveBalanceService.getTransactions(organisationId, accountId);
+
+        assertEquals(2, result.size());
+
+        assertSame(accrual, result.get(0));
+
+        assertSame(adjustment, result.get(1));
     }
 }

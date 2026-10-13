@@ -71,6 +71,33 @@ public class LeavePolicy {
         this.active = true;
     }
 
+    public void update(LeaveAccrualMethod accrualMethod, BigDecimal accrualRate, boolean allowNegative, BigDecimal negativeLimitDays) {
+        if (accrualMethod == null) {
+            throw new IllegalArgumentException("Accrual method is required");
+        }
+
+        if (accrualRate == null || accrualRate.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Accrual rate must be greater than zero");
+        }
+
+        if (negativeLimitDays == null || negativeLimitDays.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Negative limit days cannot be negative");
+        }
+
+        if (!allowNegative && negativeLimitDays.compareTo(BigDecimal.ZERO) != 0) {
+            throw new IllegalArgumentException("Negative limit days must be zero when negative leave is disabled");
+        }
+
+        this.accrualMethod = accrualMethod;
+        this.accrualRate = accrualRate;
+        this.allowNegative = allowNegative;
+        this.negativeLimitDays = negativeLimitDays;
+    }
+
+    public void updateStatus(boolean active) {
+        this.active = active;
+    }
+
     @PrePersist
     void prePersist() {
 

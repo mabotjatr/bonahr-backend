@@ -12,6 +12,7 @@ import za.co.bonalabs.bonahr.repository.LeaveBalanceTransactionRepository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -106,6 +107,14 @@ public class LeaveBalanceService {
                 organisationId,
                 employeeId,
                 leaveTypeId).orElseThrow(() -> new ResourceNotFoundException("Leave account not found for employee: " + employeeId + " and leave type: " + leaveTypeId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<LeaveBalanceTransaction> getTransactions(UUID organisationId, UUID accountId) {
+
+        getLeaveAccount(organisationId, accountId);
+
+        return leaveBalanceTransactionRepository.findAllByOrganisationIdAndLeaveAccountIdOrderByCreatedAtAsc(organisationId, accountId);
     }
 
     private void releaseLeaveDays(EmployeeLeaveAccount account, LeaveRequest leaveRequest, BigDecimal days, UUID actorUserId) {

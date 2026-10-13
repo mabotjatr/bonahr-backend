@@ -19,6 +19,10 @@ public class SecurityConfig {
     public static final String API_V_1_LEAVE_TYPES_UPDATE = "/api/v1/leave-types/**";
     public static final String API_V_1_LEAVE_REQUESTS = "/api/v1/leave-requests";
     public static final String API_V_1_LEAVE_REQUESTS_UPDATE = "/api/v1/leave-requests/**";
+    public static final String API_V_1_LEAVE_POLICIES = "/api/v1/leave-policies";
+    public static final String API_V_1_LEAVE_POLICIES_UPDATE = "/api/v1/leave-policies/**";
+    public static final String API_V_1_LEAVE_ACCOUNTS_POST = "/api/v1/leave-accounts";
+    public static final String API_V_1_LEAVE_ACCOUNTS = "/api/v1/leave-accounts/**";
 
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter(
@@ -43,7 +47,7 @@ public class SecurityConfig {
                         .requestMatchers( HttpMethod.POST, API_V_1_ORGANISATIONS)
                         .denyAll()
 
-                        .requestMatchers(HttpMethod.GET,"/api/v1/organisations/**")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/organisations/**")
                         .hasAnyRole(OWNER, SecurityConfig.HR_ADMIN)
 
                         .requestMatchers(HttpMethod.POST, "/api/v1/employees")
@@ -80,6 +84,24 @@ public class SecurityConfig {
                         .hasAnyRole(OWNER,HR_ADMIN)
 
                         .requestMatchers(HttpMethod.PATCH, API_V_1_LEAVE_REQUESTS_UPDATE)
+                        .hasAnyRole(OWNER,HR_ADMIN)
+
+                        .requestMatchers(HttpMethod.POST, API_V_1_LEAVE_POLICIES)
+                        .hasAnyRole(OWNER,HR_ADMIN)
+
+                        .requestMatchers(HttpMethod.PUT, API_V_1_LEAVE_POLICIES_UPDATE)
+                        .hasAnyRole(OWNER,HR_ADMIN)
+
+                        .requestMatchers(HttpMethod.PATCH, API_V_1_LEAVE_POLICIES_UPDATE)
+                        .hasAnyRole(OWNER,HR_ADMIN)
+
+                        .requestMatchers(HttpMethod.POST, API_V_1_LEAVE_ACCOUNTS_POST)
+                        .hasAnyRole(OWNER,HR_ADMIN)
+
+                        .requestMatchers(HttpMethod.POST, API_V_1_LEAVE_ACCOUNTS)
+                        .hasAnyRole(OWNER,HR_ADMIN)
+
+                        .requestMatchers(HttpMethod.GET, API_V_1_LEAVE_ACCOUNTS)
                         .hasAnyRole(OWNER,HR_ADMIN)
 
                         .anyRequest().authenticated()
