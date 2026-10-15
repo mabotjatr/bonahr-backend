@@ -93,6 +93,7 @@ public class LeaveRequestController {
                 leaveRequest.getLeaveType().getId(),
                 leaveRequest.getStartDate(),
                 leaveRequest.getEndDate(),
+                leaveRequest.getDayPortion(),
                 leaveRequest.getStatus(),
                 leaveRequest.getReason(),
                 leaveRequest.getDecisionComment(),

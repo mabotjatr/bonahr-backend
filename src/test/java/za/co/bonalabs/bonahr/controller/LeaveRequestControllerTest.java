@@ -84,6 +84,7 @@ class LeaveRequestControllerTest {
                 .andExpect(jsonPath("$.employeeId").value(employee.getId().toString()))
                 .andExpect(jsonPath("$.leaveTypeId").value(leaveType.getId().toString()))
                 .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.dayPortion").value("FULL_DAY"))
                 .andExpect(jsonPath("$.startDate").value("2026-12-07"))
                 .andExpect(jsonPath("$.endDate").value("2026-12-11"))
                 .andExpect(jsonPath("$.reason").value("December leave"));
@@ -411,5 +412,37 @@ class LeaveRequestControllerTest {
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON).content(request))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldCreateHalfDayLeaveRequestAsHrAdmin() throws Exception {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Half Day Leave API Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
+
+        String request = """
+                {
+                    "employeeId": "%s",
+                    "leaveTypeId": "%s",
+                    "startDate": "2026-11-09",
+                    "endDate": "2026-11-09",
+                    "dayPortion": "HALF_DAY_AM",
+                    "reason": "Morning appointment"
+                }
+                """.formatted(employee.getId(), leaveType.getId());
+
+        mockMvc.perform(post("/api/v1/leave-requests")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.dayPortion").value("HALF_DAY_AM"))
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.startDate").value("2026-11-09"))
+                .andExpect(jsonPath("$.endDate").value("2026-11-09"));
     }
 }

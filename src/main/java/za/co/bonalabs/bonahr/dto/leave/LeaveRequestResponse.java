@@ -1,6 +1,7 @@
 package za.co.bonalabs.bonahr.dto.leave;
 
 import za.co.bonalabs.bonahr.entity.LeaveRequestStatus;
+import za.co.bonalabs.bonahr.entity.LeaveDayPortion;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -13,6 +14,7 @@ public record LeaveRequestResponse(
         UUID leaveTypeId,
         LocalDate startDate,
         LocalDate endDate,
+        LeaveDayPortion dayPortion,
         LeaveRequestStatus status,
         String reason,
         String decisionComment,
