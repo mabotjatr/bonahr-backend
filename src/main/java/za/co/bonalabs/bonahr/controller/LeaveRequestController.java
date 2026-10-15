@@ -6,11 +6,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import za.co.bonalabs.bonahr.dto.leave.CreateLeaveRequestRequest;
+import za.co.bonalabs.bonahr.dto.leave.CreateOwnLeaveRequestRequest;
 import za.co.bonalabs.bonahr.dto.leave.LeaveDecisionRequest;
 import za.co.bonalabs.bonahr.dto.leave.LeaveRequestResponse;
+import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.entity.LeaveRequest;
 import za.co.bonalabs.bonahr.security.JwtAuthenticationDetails;
 import za.co.bonalabs.bonahr.service.LeaveRequestService;
+import za.co.bonalabs.bonahr.service.UserService;
 
 import java.util.List;
 import java.util.UUID;
@@ -20,9 +23,11 @@ import java.util.UUID;
 public class LeaveRequestController {
 
     private final LeaveRequestService leaveRequestService;
+    private final UserService userService;
 
-    public LeaveRequestController(LeaveRequestService leaveRequestService) {
+    public LeaveRequestController(LeaveRequestService leaveRequestService,  UserService userService) {
         this.leaveRequestService = leaveRequestService;
+        this.userService = userService;
     }
 
     @PostMapping
@@ -83,6 +88,26 @@ public class LeaveRequestController {
         LeaveRequest leaveRequest = leaveRequestService.cancelLeaveRequest(details.organisationId(), id, details.userId());
 
         return ResponseEntity.ok(toResponse(leaveRequest));
+    }
+
+    @PostMapping("/me")
+    public ResponseEntity<LeaveRequestResponse> createOwnLeaveRequest(@Valid @RequestBody CreateOwnLeaveRequestRequest request, Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        Employee employee = userService.resolveEmployee(details.organisationId(), details.userId());
+
+        CreateLeaveRequestRequest createRequest = new CreateLeaveRequestRequest(
+                employee.getId(),
+                request.leaveTypeId(),
+                request.startDate(),
+                request.endDate(),
+                request.dayPortion(),
+                request.reason());
+
+        LeaveRequest leaveRequest = leaveRequestService.createLeaveRequest(details.organisationId(), details.userId(), createRequest);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(leaveRequest));
     }
 
     private LeaveRequestResponse toResponse(LeaveRequest leaveRequest) {

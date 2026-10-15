@@ -8,13 +8,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.MockMvc;
 import za.co.bonalabs.bonahr.dto.leave.CreateLeaveRequestRequest;
-import za.co.bonalabs.bonahr.entity.Employee;
-import za.co.bonalabs.bonahr.entity.LeaveRequest;
-import za.co.bonalabs.bonahr.entity.LeaveType;
-import za.co.bonalabs.bonahr.entity.Organisation;
+import za.co.bonalabs.bonahr.entity.*;
 import za.co.bonalabs.bonahr.repository.EmployeeRepository;
 import za.co.bonalabs.bonahr.repository.LeaveTypeRepository;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
+import za.co.bonalabs.bonahr.repository.UserRepository;
 import za.co.bonalabs.bonahr.security.JwtService;
 import za.co.bonalabs.bonahr.service.LeaveRequestService;
 import za.co.bonalabs.bonahr.service.LeaveBalanceService;
@@ -51,6 +49,9 @@ class LeaveRequestControllerTest {
 
     @Autowired
     private LeaveRequestService leaveRequestService;
+
+    @Autowired
+    private UserRepository userRepository;
 
     private String createAccessToken(UUID organisationId, List<String> roles) {
         return jwtService.generateToken(UUID.randomUUID(), organisationId, roles);
@@ -444,5 +445,42 @@ class LeaveRequestControllerTest {
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.startDate").value("2026-11-09"))
                 .andExpect(jsonPath("$.endDate").value("2026-11-09"));
+    }
+
+    @Test
+    void shouldAllowEmployeeToCreateOwnLeaveRequest() throws Exception {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Employee Self Service Leave " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        User user = new User(organisation, "jane." + UUID.randomUUID() + "@example.com", "Jane", "Doe");
+
+        user.linkEmployee(employee);
+
+        user = userRepository.saveAndFlush(user);
+
+        String token = jwtService.generateToken(user.getId(), organisation.getId(), List.of("EMPLOYEE"));
+
+        String request = """
+                {
+                    "leaveTypeId": "%s",
+                    "startDate": "2026-11-09",
+                    "endDate": "2026-11-13",
+                    "dayPortion": "FULL_DAY",
+                    "reason": "Annual leave"
+                }
+                """.formatted(leaveType.getId());
+
+        mockMvc.perform(post("/api/v1/leave-requests/me").header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.employeeId").value(employee.getId().toString()))
+                .andExpect(jsonPath("$.organisationId").value(organisation.getId().toString()))
+                .andExpect(jsonPath("$.leaveTypeId").value(leaveType.getId().toString()))
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.dayPortion").value("FULL_DAY"));
     }
 }
