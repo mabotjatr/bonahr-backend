@@ -814,4 +814,35 @@ class LeaveRequestServiceTest {
 
         assertEquals(LeaveRequestStatus.PENDING, result.getStatus());
     }
+
+    @Test
+    void shouldAllowNonOverlappingLeaveRequestStartingAfterExistingRequestEnds() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Non Overlapping Leave Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        UUID userId = UUID.randomUUID();
+
+        leaveRequestService.createLeaveRequest(organisation.getId(), userId, new CreateLeaveRequestRequest(
+                employee.getId(),
+                leaveType.getId(),
+                LocalDate.of(2026, 11, 2),
+                LocalDate.of(2026, 11, 6),
+                "First leave"));
+
+        LeaveRequest result = leaveRequestService.createLeaveRequest(
+                organisation.getId(),
+                userId,
+                new CreateLeaveRequestRequest(
+                        employee.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 7),
+                        LocalDate.of(2026, 11, 10),
+                        "Next leave"));
+
+        assertEquals(LeaveRequestStatus.PENDING, result.getStatus());
+    }
 }
