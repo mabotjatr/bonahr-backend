@@ -636,4 +636,50 @@ class LeaveRequestServiceTest {
 
         verify(leaveBalanceService).approveLeaveDays(eq(organisation.getId()), eq(result), eq(BigDecimal.valueOf(5)), eq(requestedByUserId));
     }
+
+    @Test
+    void shouldRejectLeaveRequestForInactiveEmployee() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Inactive Employee Leave Company " + UUID.randomUUID()));
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe");
+
+        employee.setStatus(EmployeeStatus.INACTIVE);
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        CreateLeaveRequestRequest request = new CreateLeaveRequestRequest(
+                employee.getId(),
+                leaveType.getId(),
+                LocalDate.of(2026, 11, 2),
+                LocalDate.of(2026, 11, 6),
+                "Family holiday");
+
+        assertThrows(IllegalStateException.class, () -> leaveRequestService.createLeaveRequest(organisation.getId(), UUID.randomUUID(), request));
+    }
+
+    @Test
+    void shouldRejectLeaveRequestForTerminatedEmployee() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Terminated Employee Leave Company " + UUID.randomUUID()));
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe");
+
+        employee.setStatus(EmployeeStatus.TERMINATED);
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        CreateLeaveRequestRequest request = new CreateLeaveRequestRequest(
+                employee.getId(),
+                leaveType.getId(),
+                LocalDate.of(2026, 11, 2),
+                LocalDate.of(2026, 11, 6),
+                "Family holiday");
+
+        assertThrows(IllegalStateException.class, () -> leaveRequestService.createLeaveRequest(organisation.getId(), UUID.randomUUID(), request));
+    }
 }

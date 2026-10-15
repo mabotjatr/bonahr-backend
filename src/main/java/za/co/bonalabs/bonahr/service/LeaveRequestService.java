@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.dto.leave.CreateLeaveRequestRequest;
 import za.co.bonalabs.bonahr.entity.Employee;
+import za.co.bonalabs.bonahr.entity.EmployeeStatus;
 import za.co.bonalabs.bonahr.entity.LeaveRequest;
 import za.co.bonalabs.bonahr.entity.LeaveType;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
@@ -42,6 +43,10 @@ public class LeaveRequestService {
         }
 
         Employee employee = employeeService.getEmployee(organisationId, request.employeeId());
+
+        if (employee.getStatus() != EmployeeStatus.ACTIVE) {
+            throw new IllegalStateException("Employee is not active: " + employee.getEmployeeNumber());
+        }
 
         LeaveType leaveType = leaveTypeService.getLeaveType(organisationId, request.leaveTypeId());
 
