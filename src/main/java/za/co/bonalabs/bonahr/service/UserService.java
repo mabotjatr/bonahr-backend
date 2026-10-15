@@ -3,6 +3,7 @@ package za.co.bonalabs.bonahr.service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.entity.User;
 import za.co.bonalabs.bonahr.repository.UserRepository;
 
@@ -14,10 +15,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public UserService(
-            UserRepository userRepository,
-            PasswordEncoder passwordEncoder
-    ) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
     }
@@ -25,17 +23,24 @@ public class UserService {
     @Transactional
     public User setPassword(UUID userId, String rawPassword) {
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "User not found: " + userId
-                        )
-                );
+        User user = userRepository.findById(userId).orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
 
-        user.setPasswordHash(
-                passwordEncoder.encode(rawPassword)
-        );
+        user.setPasswordHash(passwordEncoder.encode(rawPassword));
 
         return user;
+    }
+
+    @Transactional(readOnly = true)
+    public Employee resolveEmployee(UUID organisationId, UUID userId) {
+
+        User user = userRepository.findByIdAndOrganisationId(userId, organisationId).orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+
+        Employee employee = user.getEmployee();
+
+        if (employee == null) {
+            throw new IllegalStateException("User is not linked to an employee");
+        }
+
+        return employee;
     }
 }
