@@ -23,19 +23,16 @@ public class User {
     private UUID id;
 
     @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "user_roles",
-            joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
+    @JoinTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
     private Set<Role> roles = new HashSet<>();
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(
-            name = "organisation_id",
-            nullable = false
-    )
+    @JoinColumn(name = "organisation_id", nullable = false)
     private Organisation organisation;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "employee_id", unique = true)
+    private Employee employee;
 
     @Column(nullable = false, length = 255)
     private String email;
@@ -151,5 +148,20 @@ public class User {
 
     public void setStatus(UserStatus status) {
         this.status = status;
+    }
+
+    public Employee getEmployee() {
+        return employee;
+    }
+
+    public void linkEmployee(Employee employee) {
+
+        if (!organisation.getId().equals(employee.getOrganisation().getId())) {
+            throw new IllegalArgumentException(
+                    "User and employee must belong to the same organisation"
+            );
+        }
+
+        this.employee = employee;
     }
 }

@@ -8,10 +8,13 @@ import za.co.bonalabs.bonahr.entity.Organisation;
 import za.co.bonalabs.bonahr.entity.Role;
 import za.co.bonalabs.bonahr.entity.User;
 import za.co.bonalabs.bonahr.entity.UserStatus;
+import za.co.bonalabs.bonahr.entity.Employee;
 
+import java.util.UUID;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 
 @SpringBootTest
 @Transactional
@@ -25,6 +28,9 @@ class UserRepositoryTest {
 
     @Autowired
     private RoleRepository roleRepository;
+
+    @Autowired
+    private EmployeeRepository employeeRepository;
 
     @Test
     void shouldSaveUserForOrganisation() {
@@ -100,5 +106,37 @@ class UserRepositoryTest {
         assertThat(saved.getRoles()).hasSize(2);
 
         assertThat(saved.getRoles()).extracting(Role::getName).containsExactlyInAnyOrder("HR_ADMIN", "PAYROLL_ADMIN");
+    }
+
+    @Test
+    void shouldLinkUserToEmployeeWithinSameOrganisation() {
+
+        Organisation organisation = organisationRepository.save(new Organisation("Employee Link Organisation"));
+
+        Employee employee = employeeRepository.save(new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe"));
+
+        User user = new User(organisation, "john.employee@example.com", "John", "Doe");
+
+        user.linkEmployee(employee);
+
+        User saved = userRepository.saveAndFlush(user);
+
+        assertThat(saved.getEmployee()).isNotNull();
+
+        assertThat(saved.getEmployee().getId()).isEqualTo(employee.getId());
+    }
+
+    @Test
+    void shouldRejectLinkingUserToEmployeeFromDifferentOrganisation() {
+
+        Organisation organisationA = organisationRepository.save(new Organisation("User Organisation"));
+
+        Organisation organisationB = organisationRepository.save(new Organisation("Employee Organisation"));
+
+        Employee employee = employeeRepository.save(new Employee(organisationB, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        User user = new User(organisationA, "john@example.com", "John", "Doe");
+
+        assertThatThrownBy(() -> user.linkEmployee(employee)).isInstanceOf(IllegalArgumentException.class).hasMessage("User and employee must belong to the same organisation");
     }
 }
