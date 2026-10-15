@@ -156,6 +156,11 @@ public class LeaveRequestService {
         return savedLeaveRequest;
     }
 
+    @Transactional(readOnly = true)
+    public List<LeaveRequest> getLeaveRequests(UUID organisationId, UUID employeeId) {
+        return leaveRequestRepository.findAllByOrganisationIdAndEmployeeIdOrderByStartDateAsc(organisationId, employeeId);
+    }
+
     private BigDecimal calculateRequestedDays(LeaveRequest leaveRequest) {
         return leaveDayCalculator.calculate(leaveRequest.getStartDate(), leaveRequest.getEndDate(), leaveRequest.getDayPortion());
     }

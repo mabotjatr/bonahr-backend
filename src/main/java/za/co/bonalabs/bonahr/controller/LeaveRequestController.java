@@ -110,6 +110,18 @@ public class LeaveRequestController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(leaveRequest));
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<List<LeaveRequestResponse>> getOwnLeaveRequests(Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        Employee employee = userService.resolveEmployee(details.organisationId(), details.userId());
+
+        List<LeaveRequestResponse> response = leaveRequestService.getLeaveRequests(details.organisationId(), employee.getId()).stream().map(this::toResponse).toList();
+
+        return ResponseEntity.ok(response);
+    }
+
     private LeaveRequestResponse toResponse(LeaveRequest leaveRequest) {
         return new LeaveRequestResponse(
                 leaveRequest.getId(),

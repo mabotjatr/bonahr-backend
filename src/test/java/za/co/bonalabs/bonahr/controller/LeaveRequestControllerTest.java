@@ -483,4 +483,48 @@ class LeaveRequestControllerTest {
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.dayPortion").value("FULL_DAY"));
     }
+
+    @Test
+    void shouldAllowEmployeeToListOnlyOwnLeaveRequests() throws Exception {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Employee Leave History " + UUID.randomUUID()));
+
+        Employee employeeA = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        Employee employeeB = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Smith"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        User user = new User(organisation, "jane.history." + UUID.randomUUID() + "@example.com", "Jane", "Doe");
+
+        user.linkEmployee(employeeA);
+
+        user = userRepository.saveAndFlush(user);
+
+        leaveRequestService.createLeaveRequest(
+                organisation.getId(),
+                user.getId(),
+                new CreateLeaveRequestRequest(
+                        employeeA.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 9),
+                        LocalDate.of(2026, 11, 13),
+                        "Jane leave"));
+
+        leaveRequestService.createLeaveRequest(
+                organisation.getId(), UUID.randomUUID(), new CreateLeaveRequestRequest(
+                        employeeB.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 16),
+                        LocalDate.of(2026, 11, 20),
+                        "John leave"));
+
+        String token = jwtService.generateToken(user.getId(), organisation.getId(), List.of("EMPLOYEE"));
+
+        mockMvc.perform(get("/api/v1/leave-requests/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].employeeId").value(employeeA.getId().toString()))
+                .andExpect(jsonPath("$[0].reason").value("Jane leave"));
+    }
 }
