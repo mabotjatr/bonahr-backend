@@ -3,10 +3,7 @@ package za.co.bonalabs.bonahr.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.dto.leave.CreateLeaveRequestRequest;
-import za.co.bonalabs.bonahr.entity.Employee;
-import za.co.bonalabs.bonahr.entity.EmployeeStatus;
-import za.co.bonalabs.bonahr.entity.LeaveRequest;
-import za.co.bonalabs.bonahr.entity.LeaveType;
+import za.co.bonalabs.bonahr.entity.*;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 import za.co.bonalabs.bonahr.repository.LeaveRequestRepository;
 
@@ -52,6 +49,17 @@ public class LeaveRequestService {
 
         if (!leaveType.isActive()) {
             throw new IllegalStateException("Leave type is inactive: " + leaveType.getCode());
+        }
+
+        boolean overlappingRequestExists = leaveRequestRepository.existsByOrganisationIdAndEmployeeIdAndStatusInAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+                organisationId,
+                employee.getId(),
+                List.of(LeaveRequestStatus.PENDING, LeaveRequestStatus.APPROVED),
+                request.endDate(),
+                request.startDate());
+
+        if (overlappingRequestExists) {
+            throw new IllegalStateException("Employee already has an overlapping leave request");
         }
 
         LeaveRequest leaveRequest = new LeaveRequest(

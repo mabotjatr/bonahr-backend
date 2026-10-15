@@ -682,4 +682,136 @@ class LeaveRequestServiceTest {
 
         assertThrows(IllegalStateException.class, () -> leaveRequestService.createLeaveRequest(organisation.getId(), UUID.randomUUID(), request));
     }
+
+    @Test
+    void shouldRejectOverlappingPendingLeaveRequestForSameEmployee() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Overlapping Leave Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        leaveRequestService.createLeaveRequest(
+                organisation.getId(),
+                UUID.randomUUID(),
+                new CreateLeaveRequestRequest(
+                        employee.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 2),
+                        LocalDate.of(2026, 11, 6),
+                        "First leave request"));
+
+        CreateLeaveRequestRequest overlappingRequest = new CreateLeaveRequestRequest(
+                employee.getId(),
+                leaveType.getId(),
+                LocalDate.of(2026, 11, 5),
+                LocalDate.of(2026, 11, 8),
+                "Overlapping leave request");
+
+        assertThrows(IllegalStateException.class, () -> leaveRequestService.createLeaveRequest(organisation.getId(), UUID.randomUUID(), overlappingRequest));
+    }
+
+    @Test
+    void shouldRejectOverlappingApprovedLeaveRequestForSameEmployee() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Approved Overlap Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "SPECIAL", "Special Leave", true, false));
+
+        LeaveRequest approvedRequest = leaveRequestService.createLeaveRequest(
+                organisation.getId(),
+                UUID.randomUUID(),
+                new CreateLeaveRequestRequest(
+                        employee.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 2),
+                        LocalDate.of(2026, 11, 6),
+                        "Approved leave"));
+
+        assertEquals(LeaveRequestStatus.APPROVED, approvedRequest.getStatus());
+
+        CreateLeaveRequestRequest overlappingRequest = new CreateLeaveRequestRequest(
+                employee.getId(),
+                leaveType.getId(),
+                LocalDate.of(2026, 11, 5),
+                LocalDate.of(2026, 11, 8),
+                "Overlapping approved leave");
+
+        assertThrows(IllegalStateException.class, () -> leaveRequestService.createLeaveRequest(organisation.getId(), UUID.randomUUID(), overlappingRequest));
+    }
+
+    @Test
+    void shouldAllowOverlappingLeaveRequestWhenExistingRequestIsCancelled() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Cancelled Overlap Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        UUID userId = UUID.randomUUID();
+
+        LeaveRequest firstRequest = leaveRequestService.createLeaveRequest(
+                organisation.getId(),
+                userId, new CreateLeaveRequestRequest(
+                        employee.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 2),
+                        LocalDate.of(2026, 11, 6),
+                        "Original leave"));
+
+        leaveRequestService.cancelLeaveRequest(organisation.getId(), firstRequest.getId(), userId);
+
+        LeaveRequest result = leaveRequestService.createLeaveRequest(
+                organisation.getId(),
+                userId,
+                new CreateLeaveRequestRequest(
+                        employee.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 5),
+                        LocalDate.of(2026, 11, 8),
+                        "Replacement leave"));
+
+        assertEquals(LeaveRequestStatus.PENDING, result.getStatus());
+    }
+
+    @Test
+    void shouldAllowOverlappingLeaveRequestWhenExistingRequestIsRejected() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Rejected Overlap Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        UUID requestedByUserId = UUID.randomUUID();
+        UUID decidedByUserId = UUID.randomUUID();
+
+        LeaveRequest firstRequest = leaveRequestService.createLeaveRequest(
+                organisation.getId(),
+                requestedByUserId,
+                new CreateLeaveRequestRequest(
+                        employee.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 2),
+                        LocalDate.of(2026, 11, 6),
+                        "Original leave"));
+
+        leaveRequestService.rejectLeaveRequest(organisation.getId(), firstRequest.getId(), decidedByUserId, "Not approved");
+
+        LeaveRequest result = leaveRequestService.createLeaveRequest(
+                organisation.getId(),
+                requestedByUserId,
+                new CreateLeaveRequestRequest(
+                        employee.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 5),
+                        LocalDate.of(2026, 11, 8),
+                        "Replacement leave"));
+
+        assertEquals(LeaveRequestStatus.PENDING, result.getStatus());
+    }
 }
