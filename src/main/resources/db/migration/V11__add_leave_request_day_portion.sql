@@ -1,0 +1,2 @@
+ALTER TABLE leave_requests
+    ADD COLUMN day_portion VARCHAR(30) NOT NULL DEFAULT 'FULL_DAY';

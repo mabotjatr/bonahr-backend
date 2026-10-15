@@ -11,6 +11,7 @@ import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 import za.co.bonalabs.bonahr.repository.EmployeeRepository;
 import za.co.bonalabs.bonahr.repository.LeaveTypeRepository;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
+import za.co.bonalabs.bonahr.repository.PublicHolidayRepository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -41,6 +42,9 @@ class LeaveRequestServiceTest {
 
     @Autowired
     private LeaveTypeRepository leaveTypeRepository;
+
+    @Autowired
+    private PublicHolidayRepository publicHolidayRepository;
 
     @Test
     void shouldCreatePendingLeaveRequest() {
@@ -626,7 +630,12 @@ class LeaveRequestServiceTest {
 
         UUID requestedByUserId = UUID.randomUUID();
 
-        CreateLeaveRequestRequest request = new CreateLeaveRequestRequest(employee.getId(), leaveType.getId(), LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 6), "Special leave");
+        CreateLeaveRequestRequest request = new CreateLeaveRequestRequest(
+                employee.getId(),
+                leaveType.getId(),
+                LocalDate.of(2026, 11, 9),
+                LocalDate.of(2026, 11, 13),
+                "Special leave");
 
         LeaveRequest result = leaveRequestService.createLeaveRequest(organisation.getId(), requestedByUserId, request);
 
@@ -844,5 +853,147 @@ class LeaveRequestServiceTest {
                         "Next leave"));
 
         assertEquals(LeaveRequestStatus.PENDING, result.getStatus());
+    }
+
+    @Test
+    void shouldReserveHalfDayWhenCreatingHalfDayLeaveRequest() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Half Day Leave Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        UUID requestedByUserId = UUID.randomUUID();
+
+        LeaveRequest result = leaveRequestService.createLeaveRequest(
+                organisation.getId(),
+                requestedByUserId,
+                new CreateLeaveRequestRequest(
+                        employee.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 9),
+                        LocalDate.of(2026, 11, 9),
+                        LeaveDayPortion.HALF_DAY_AM,
+                        "Morning appointment"));
+
+        assertEquals(LeaveDayPortion.HALF_DAY_AM, result.getDayPortion());
+
+        verify(leaveBalanceService).reserveLeaveDays(eq(organisation.getId()), eq(result), eq(new BigDecimal("0.5")), eq(requestedByUserId));
+    }
+
+    @Test
+    void shouldExcludePublicHolidayWhenReservingLeaveDays() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Public Holiday Leave Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        LocalDate publicHoliday = LocalDate.of(2026, 11, 11);
+
+        publicHolidayRepository.saveAndFlush(new PublicHoliday("ZA", publicHoliday, "Test Public Holiday"));
+
+        UUID requestedByUserId = UUID.randomUUID();
+
+        LeaveRequest result = leaveRequestService.createLeaveRequest(
+                organisation.getId(),
+                requestedByUserId,
+                new CreateLeaveRequestRequest(
+                        employee.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 9),
+                        LocalDate.of(2026, 11, 13),
+                        "Leave over public holiday"));
+
+        verify(leaveBalanceService).reserveLeaveDays(eq(organisation.getId()), eq(result), eq(BigDecimal.valueOf(4)), eq(requestedByUserId));
+    }
+
+    @Test
+    void shouldRejectHalfDayLeaveOnPublicHoliday() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Half Day Public Holiday Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        LocalDate publicHoliday = LocalDate.of(2026, 11, 11);
+
+        publicHolidayRepository.saveAndFlush(new PublicHoliday("ZA", publicHoliday, "Test Public Holiday"));
+
+        UUID requestedByUserId = UUID.randomUUID();
+
+        CreateLeaveRequestRequest request = new CreateLeaveRequestRequest(
+                employee.getId(),
+                leaveType.getId(),
+                publicHoliday,
+                publicHoliday,
+                LeaveDayPortion.HALF_DAY_AM,
+                "Half day on holiday");
+
+        assertThrows(IllegalArgumentException.class, () -> leaveRequestService.createLeaveRequest(organisation.getId(), requestedByUserId, request));
+    }
+
+    @Test
+    void shouldRejectLeaveRequestThatFallsOnlyOnWeekend() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Weekend Only Leave Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        CreateLeaveRequestRequest request =
+                new CreateLeaveRequestRequest(
+                        employee.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 7),  // Saturday
+                        LocalDate.of(2026, 11, 8),  // Sunday
+                        "Weekend only leave"
+                );
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> leaveRequestService.createLeaveRequest(
+                        organisation.getId(),
+                        UUID.randomUUID(),
+                        request
+                )
+        );
+    }
+
+    @Test
+    void shouldExcludeSeededSouthAfricanPublicHolidayWhenReservingLeaveDays() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Seeded Holiday Leave Company " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        UUID requestedByUserId = UUID.randomUUID();
+
+        LeaveRequest result =
+                leaveRequestService.createLeaveRequest(
+                        organisation.getId(),
+                        requestedByUserId,
+                        new CreateLeaveRequestRequest(
+                                employee.getId(),
+                                leaveType.getId(),
+                                LocalDate.of(2026, 11, 2),  // Monday
+                                LocalDate.of(2026, 11, 6),  // Friday
+                                "Leave over seeded public holiday"
+                        )
+                );
+
+        verify(leaveBalanceService)
+                .reserveLeaveDays(
+                        eq(organisation.getId()),
+                        eq(result),
+                        eq(BigDecimal.valueOf(4)),
+                        eq(requestedByUserId)
+                );
     }
 }

@@ -33,6 +33,10 @@ public class LeaveRequest {
     private LocalDate endDate;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "day_portion", nullable = false, length = 30)
+    private LeaveDayPortion dayPortion;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private LeaveRequestStatus status;
 
@@ -63,12 +67,32 @@ public class LeaveRequest {
     protected LeaveRequest() {
     }
 
-    public LeaveRequest(Organisation organisation, Employee employee, LeaveType leaveType, LocalDate startDate, LocalDate endDate, String reason, UUID requestedByUserId) {
+    public LeaveRequest(
+            Organisation organisation,
+            Employee employee,
+            LeaveType leaveType,
+            LocalDate startDate,
+            LocalDate endDate,
+            String reason,
+            UUID requestedByUserId) {
+        this(organisation, employee, leaveType, startDate, endDate, LeaveDayPortion.FULL_DAY, reason, requestedByUserId);
+    }
+
+    public LeaveRequest(
+            Organisation organisation,
+            Employee employee,
+            LeaveType leaveType,
+            LocalDate startDate,
+            LocalDate endDate,
+            LeaveDayPortion dayPortion,
+            String reason,
+            UUID requestedByUserId) {
         this.organisation = organisation;
         this.employee = employee;
         this.leaveType = leaveType;
         this.startDate = startDate;
         this.endDate = endDate;
+        this.dayPortion = dayPortion;
         this.reason = reason;
         this.requestedByUserId = requestedByUserId;
         this.status = LeaveRequestStatus.PENDING;
@@ -128,6 +152,10 @@ public class LeaveRequest {
             createdAt = now;
         }
 
+        if (dayPortion == null) {
+            dayPortion = LeaveDayPortion.FULL_DAY;
+        }
+
         updatedAt = now;
     }
 
@@ -158,6 +186,10 @@ public class LeaveRequest {
 
     public LocalDate getEndDate() {
         return endDate;
+    }
+
+    public LeaveDayPortion getDayPortion() {
+        return dayPortion;
     }
 
     public LeaveRequestStatus getStatus() {

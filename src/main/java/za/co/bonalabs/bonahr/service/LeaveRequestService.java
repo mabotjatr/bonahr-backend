@@ -8,8 +8,6 @@ import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 import za.co.bonalabs.bonahr.repository.LeaveRequestRepository;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -20,16 +18,19 @@ public class LeaveRequestService {
     private final EmployeeService employeeService;
     private final LeaveTypeService leaveTypeService;
     private final LeaveBalanceService leaveBalanceService;
+    private final LeaveDayCalculator leaveDayCalculator;
 
     public LeaveRequestService(
             LeaveRequestRepository leaveRequestRepository,
             EmployeeService employeeService,
             LeaveTypeService leaveTypeService,
-            LeaveBalanceService leaveBalanceService) {
+            LeaveBalanceService leaveBalanceService,
+            LeaveDayCalculator leaveDayCalculator) {
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeService = employeeService;
         this.leaveTypeService = leaveTypeService;
         this.leaveBalanceService = leaveBalanceService;
+        this.leaveDayCalculator = leaveDayCalculator;
     }
 
     @Transactional
@@ -68,12 +69,19 @@ public class LeaveRequestService {
                 leaveType,
                 request.startDate(),
                 request.endDate(),
+                request.dayPortion(),
                 request.reason(),
                 requestedByUserId);
 
         LeaveRequest savedLeaveRequest = leaveRequestRepository.saveAndFlush(leaveRequest);
 
-        BigDecimal requestedDays = calculateRequestedDays(request.startDate(), request.endDate());
+        BigDecimal requestedDays = calculateRequestedDays(savedLeaveRequest);
+
+        if (requestedDays.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException(
+                    "Leave request must include at least one working day"
+            );
+        }
 
         leaveBalanceService.reserveLeaveDays(organisationId, savedLeaveRequest, requestedDays, requestedByUserId);
 
@@ -109,7 +117,7 @@ public class LeaveRequestService {
 
         LeaveRequest savedLeaveRequest = leaveRequestRepository.saveAndFlush(leaveRequest);
 
-        BigDecimal requestedDays = calculateRequestedDays(leaveRequest.getStartDate(), leaveRequest.getEndDate());
+        BigDecimal requestedDays = calculateRequestedDays(savedLeaveRequest);
 
         leaveBalanceService.approveLeaveDays(organisationId, leaveRequest, requestedDays, decidedByUserId);
 
@@ -125,7 +133,7 @@ public class LeaveRequestService {
 
         LeaveRequest savedLeaveRequest = leaveRequestRepository.saveAndFlush(leaveRequest);
 
-        BigDecimal requestedDays = calculateRequestedDays(leaveRequest.getStartDate(), leaveRequest.getEndDate());
+        BigDecimal requestedDays = calculateRequestedDays(savedLeaveRequest);
 
         leaveBalanceService.releaseLeaveDays(organisationId, leaveRequest, requestedDays, decidedByUserId);
 
@@ -141,17 +149,14 @@ public class LeaveRequestService {
 
         LeaveRequest savedLeaveRequest = leaveRequestRepository.saveAndFlush(leaveRequest);
 
-        BigDecimal requestedDays = calculateRequestedDays(leaveRequest.getStartDate(), leaveRequest.getEndDate());
+        BigDecimal requestedDays = calculateRequestedDays(savedLeaveRequest);
 
         leaveBalanceService.releaseLeaveDays(organisationId, leaveRequest, requestedDays, cancelledByUserId);
 
         return savedLeaveRequest;
     }
 
-    private BigDecimal calculateRequestedDays(LocalDate startDate, LocalDate endDate) {
-
-        long days = ChronoUnit.DAYS.between(startDate, endDate) + 1;
-
-        return BigDecimal.valueOf(days);
+    private BigDecimal calculateRequestedDays(LeaveRequest leaveRequest) {
+        return leaveDayCalculator.calculate(leaveRequest.getStartDate(), leaveRequest.getEndDate(), leaveRequest.getDayPortion());
     }
 }
