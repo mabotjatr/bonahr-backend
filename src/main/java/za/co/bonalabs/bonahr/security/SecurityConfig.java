@@ -28,6 +28,7 @@ public class SecurityConfig {
     public static final String API_V_1_LEAVE_ACCOUNTS = "/api/v1/leave-accounts/**";
     public static final String API_V_1_LEAVE_ACCOUNTS_ME = "/api/v1/leave-accounts/me";
     public static final String API_V_1_LEAVE_REQUESTS_ME_UPDATE = "/api/v1/leave-requests/me/**";
+    public static final String API_V_1_USERS_EMPLOYEE_LINK = "/api/v1/users/*/employee";
 
 
     @Bean
@@ -130,6 +131,10 @@ public class SecurityConfig {
                         .hasAnyRole(OWNER, HR_ADMIN)
 
                         .requestMatchers(HttpMethod.GET, API_V_1_LEAVE_ACCOUNTS)
+                        .hasAnyRole(OWNER, HR_ADMIN)
+
+                        // User -> Employee linking
+                        .requestMatchers(HttpMethod.PATCH,API_V_1_USERS_EMPLOYEE_LINK )
                         .hasAnyRole(OWNER, HR_ADMIN)
 
                         // Everything else requires authentication

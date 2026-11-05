@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import za.co.bonalabs.bonahr.entity.Organisation;
 import za.co.bonalabs.bonahr.entity.User;
+import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 import za.co.bonalabs.bonahr.repository.UserRepository;
 import za.co.bonalabs.bonahr.entity.Employee;
@@ -102,5 +103,114 @@ class UserServiceTest {
         UUID userId = user.getId();
 
         assertThatThrownBy(() -> userService.resolveEmployee(organisation.getId(), userId)).isInstanceOf(IllegalStateException.class).hasMessage("User is not linked to an employee");
+    }
+
+    @Test
+    void shouldLinkUserToEmployeeWithinSameOrganisation() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Employee Linking Organisation " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Doe"));
+
+        User user = userRepository.saveAndFlush(new User(organisation, "john.link." + UUID.randomUUID() + "@example.com", "John", "Doe"));
+
+        User linkedUser = userService.linkEmployee(organisation.getId(), user.getId(), employee.getId());
+
+        assertThat(linkedUser.getEmployee()).isNotNull();
+
+        assertThat(linkedUser.getEmployee().getId()).isEqualTo(employee.getId());
+
+        User persisted = userRepository.findById(user.getId()).orElseThrow();
+
+        assertThat(persisted.getEmployee()).isNotNull();
+
+        assertThat(persisted.getEmployee().getId()).isEqualTo(employee.getId());
+    }
+
+    @Test
+    void shouldRejectLinkingUserToEmployeeFromDifferentOrganisation() {
+
+        Organisation organisationA = organisationRepository.saveAndFlush(new Organisation("Organisation A " + UUID.randomUUID()));
+
+        Organisation organisationB = organisationRepository.saveAndFlush(new Organisation("Organisation B " + UUID.randomUUID()));
+
+        User user = userRepository.saveAndFlush(new User(organisationA, "john.cross.link." + UUID.randomUUID() + "@example.com", "John", "Doe"));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisationB, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        assertThatThrownBy(() -> userService.linkEmployee(
+                organisationA.getId(),
+                user.getId(),
+                employee.getId())).isInstanceOf(ResourceNotFoundException.class).hasMessage("Employee not found: " + employee.getId());
+
+        User persisted = userRepository.findById(user.getId()).orElseThrow();
+
+        assertThat(persisted.getEmployee()).isNull();
+    }
+
+    @Test
+    void shouldRejectLinkingEmployeeAlreadyLinkedToAnotherUser() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Duplicate Employee Link Organisation " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        User firstUser = new User(organisation, "first." + UUID.randomUUID() + "@example.com", "Jane", "Doe");
+
+        firstUser.linkEmployee(employee);
+
+        userRepository.saveAndFlush(firstUser);
+
+        User secondUser = userRepository.saveAndFlush(new User(organisation, "second." + UUID.randomUUID() + "@example.com", "John", "Doe"));
+
+        assertThatThrownBy(() -> userService.linkEmployee(organisation.getId(), secondUser.getId(), employee.getId())).isInstanceOf(IllegalStateException.class).hasMessage("Employee is already linked to another user");
+
+        User persisted = userRepository.findById(secondUser.getId()).orElseThrow();
+
+        assertThat(persisted.getEmployee()).isNull();
+    }
+
+    @Test
+    void shouldRejectLinkingUserToDifferentEmployeeWhenAlreadyLinked() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Existing Employee Link Organisation " + UUID.randomUUID()));
+
+        Employee firstEmployee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        Employee secondEmployee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Smith"));
+
+        User user = new User(organisation, "linked." + UUID.randomUUID() + "@example.com", "Jane", "Doe");
+
+        user.linkEmployee(firstEmployee);
+
+        user = userRepository.saveAndFlush(user);
+
+        UUID userId = user.getId();
+
+        assertThatThrownBy(() -> userService.linkEmployee(organisation.getId(), userId, secondEmployee.getId())).isInstanceOf(IllegalStateException.class).hasMessage("User is already linked to an employee");
+
+        User persisted = userRepository.findById(userId).orElseThrow();
+
+        assertThat(persisted.getEmployee().getId()).isEqualTo(firstEmployee.getId());
+    }
+
+    @Test
+    void shouldAllowLinkingSameUserToSameEmployeeAgain() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Idempotent Employee Link Organisation " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        User user = new User(organisation, "same.link." + UUID.randomUUID() + "@example.com", "Jane", "Doe");
+
+        user.linkEmployee(employee);
+
+        user = userRepository.saveAndFlush(user);
+
+        User linkedAgain = userService.linkEmployee(organisation.getId(), user.getId(), employee.getId());
+
+        assertThat(linkedAgain.getEmployee()).isNotNull();
+
+        assertThat(linkedAgain.getEmployee().getId()).isEqualTo(employee.getId());
     }
 }

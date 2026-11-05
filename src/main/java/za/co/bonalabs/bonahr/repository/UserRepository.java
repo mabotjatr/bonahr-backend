@@ -24,4 +24,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByOrganisationIdAndEmailWithRoles(@Param("organisationId") UUID organisationId, @Param("email") String email);
 
     Optional<User> findByIdAndOrganisationId(UUID id, UUID organisationId);
+
+    Optional<User> findByEmployeeId(UUID employeeId);
 }
