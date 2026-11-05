@@ -49,6 +49,9 @@ class EmployeeLeaveAccountControllerTest {
     @Autowired
     private LeaveBalanceService leaveBalanceService;
 
+    @Autowired
+    private UserRepository userRepository;
+
     @Test
     void shouldCreateEmployeeLeaveAccountForAuthenticatedOrganisation() throws Exception {
 
@@ -239,7 +242,8 @@ class EmployeeLeaveAccountControllerTest {
 
         LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
 
-        LeavePolicy leavePolicy = leavePolicyRepository.saveAndFlush(new LeavePolicy(organisation, leaveType, LeaveAccrualMethod.MONTHLY, new BigDecimal("1.2500"), false, BigDecimal.ZERO));
+        LeavePolicy leavePolicy = leavePolicyRepository.saveAndFlush(
+                new LeavePolicy(organisation, leaveType, LeaveAccrualMethod.MONTHLY, new BigDecimal("1.2500"), false, BigDecimal.ZERO));
 
         EmployeeLeaveAccount account = employeeLeaveAccountRepository.saveAndFlush(new EmployeeLeaveAccount(organisation, employee, leaveType, leavePolicy));
 
@@ -267,11 +271,13 @@ class EmployeeLeaveAccountControllerTest {
 
         LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
 
-        LeavePolicy leavePolicy = leavePolicyRepository.saveAndFlush(new LeavePolicy(organisation, leaveType, LeaveAccrualMethod.MONTHLY, new BigDecimal("1.2500"), false, BigDecimal.ZERO));
+        LeavePolicy leavePolicy = leavePolicyRepository.saveAndFlush(
+                new LeavePolicy(organisation, leaveType, LeaveAccrualMethod.MONTHLY, new BigDecimal("1.2500"), false, BigDecimal.ZERO));
 
         EmployeeLeaveAccount account = employeeLeaveAccountRepository.saveAndFlush(new EmployeeLeaveAccount(organisation, employee, leaveType, leavePolicy));
 
-        leaveBalanceService.applyManualAdjustment(organisation.getId(), account.getId(), new BigDecimal("2.5000"), UUID.randomUUID(), "Opening balance correction");
+        leaveBalanceService.applyManualAdjustment(
+                organisation.getId(), account.getId(), new BigDecimal("2.5000"), UUID.randomUUID(), "Opening balance correction");
 
         String token = createAccessToken(organisation.getId(), List.of("HR_ADMIN"));
 
@@ -297,12 +303,46 @@ class EmployeeLeaveAccountControllerTest {
 
         LeaveType leaveTypeB = leaveTypeRepository.saveAndFlush(new LeaveType(organisationB, "ANNUAL", "Annual Leave", true, true));
 
-        LeavePolicy policyB = leavePolicyRepository.saveAndFlush(new LeavePolicy(organisationB, leaveTypeB, LeaveAccrualMethod.MONTHLY, new BigDecimal("1.2500"), false, BigDecimal.ZERO));
+        LeavePolicy policyB = leavePolicyRepository.saveAndFlush(
+                new LeavePolicy(organisationB, leaveTypeB, LeaveAccrualMethod.MONTHLY, new BigDecimal("1.2500"), false, BigDecimal.ZERO));
 
         EmployeeLeaveAccount accountB = employeeLeaveAccountRepository.saveAndFlush(new EmployeeLeaveAccount(organisationB, employeeB, leaveTypeB, policyB));
 
         String token = createAccessToken(organisationA.getId(), List.of("HR_ADMIN"));
 
-        mockMvc.perform(get("/api/v1/leave-accounts/{id}/transactions", accountB.getId()).header("Authorization", "Bearer " + token)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/leave-accounts/{id}/transactions", accountB.getId())
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldAllowEmployeeToViewOnlyOwnLeaveAccounts() throws Exception {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Employee Self Service Accounts " + UUID.randomUUID()));
+
+        Employee employeeA = employeeRepository.saveAndFlush(
+                new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        Employee employeeB = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Smith"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        LeavePolicy policy = leavePolicyRepository.saveAndFlush(
+                new LeavePolicy(organisation, leaveType, LeaveAccrualMethod.MONTHLY, new BigDecimal("1.2500"), false, BigDecimal.ZERO));
+
+        EmployeeLeaveAccount accountA = employeeLeaveAccountRepository.saveAndFlush(new EmployeeLeaveAccount(organisation, employeeA, leaveType, policy));
+
+        // Must never be visible to employee A.
+        employeeLeaveAccountRepository.saveAndFlush(new EmployeeLeaveAccount(organisation, employeeB, leaveType, policy));
+
+        User user = new User(organisation, "jane.accounts." + UUID.randomUUID() + "@example.com", "Jane", "Doe");
+
+        user.linkEmployee(employeeA);
+
+        user = userRepository.saveAndFlush(user);
+
+        String token = jwtService.generateToken(user.getId(), organisation.getId(), List.of("EMPLOYEE"));
+
+        mockMvc.perform(get("/api/v1/leave-accounts/me").header("Authorization", "Bearer " + token)).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].id").value(accountA.getId().toString())).andExpect(jsonPath("$[0].employeeId").value(employeeA.getId().toString())).andExpect(jsonPath("$[0].employeeName").value("Jane Doe")).andExpect(jsonPath("$[0].leaveTypeCode").value("ANNUAL"));
     }
 }

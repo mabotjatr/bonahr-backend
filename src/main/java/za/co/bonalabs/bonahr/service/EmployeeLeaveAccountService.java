@@ -59,4 +59,9 @@ public class EmployeeLeaveAccountService {
     public List<EmployeeLeaveAccount> getEmployeeLeaveAccounts(UUID organisationId) {
         return employeeLeaveAccountRepository.findAllByOrganisationId(organisationId);
     }
+
+    @Transactional(readOnly = true)
+    public List<EmployeeLeaveAccount> getEmployeeLeaveAccounts(UUID organisationId, UUID employeeId) {
+        return employeeLeaveAccountRepository.findAllByOrganisationIdAndEmployeeId(organisationId, employeeId);
+    }
 }

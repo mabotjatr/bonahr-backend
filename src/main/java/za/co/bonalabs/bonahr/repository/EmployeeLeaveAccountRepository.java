@@ -19,4 +19,5 @@ public interface EmployeeLeaveAccountRepository extends JpaRepository<EmployeeLe
 
     List<EmployeeLeaveAccount> findAllByLeavePolicyAccrualMethodAndLeavePolicyActiveTrueAndEmployeeStatus(LeaveAccrualMethod accrualMethod, EmployeeStatus employeeStatus);
 
+    List<EmployeeLeaveAccount> findAllByOrganisationIdAndEmployeeId(UUID organisationId, UUID employeeId);
 }

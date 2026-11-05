@@ -9,11 +9,13 @@ import za.co.bonalabs.bonahr.dto.leave.CreateEmployeeLeaveAccountRequest;
 import za.co.bonalabs.bonahr.dto.leave.EmployeeLeaveAccountResponse;
 import za.co.bonalabs.bonahr.dto.leave.LeaveBalanceTransactionResponse;
 import za.co.bonalabs.bonahr.dto.leave.ManualLeaveBalanceAdjustmentRequest;
+import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.entity.EmployeeLeaveAccount;
 import za.co.bonalabs.bonahr.entity.LeaveBalanceTransaction;
 import za.co.bonalabs.bonahr.security.JwtAuthenticationDetails;
 import za.co.bonalabs.bonahr.service.EmployeeLeaveAccountService;
 import za.co.bonalabs.bonahr.service.LeaveBalanceService;
+import za.co.bonalabs.bonahr.service.UserService;
 
 import java.util.List;
 import java.util.UUID;
@@ -24,10 +26,12 @@ public class EmployeeLeaveAccountController {
 
     private final EmployeeLeaveAccountService employeeLeaveAccountService;
     private final LeaveBalanceService leaveBalanceService;
+    private final UserService userService;
 
-    public EmployeeLeaveAccountController(EmployeeLeaveAccountService employeeLeaveAccountService, LeaveBalanceService leaveBalanceService) {
+    public EmployeeLeaveAccountController(EmployeeLeaveAccountService employeeLeaveAccountService, LeaveBalanceService leaveBalanceService, UserService userService) {
         this.employeeLeaveAccountService = employeeLeaveAccountService;
         this.leaveBalanceService = leaveBalanceService;
+        this.userService = userService;
     }
 
     @PostMapping
@@ -81,6 +85,19 @@ public class EmployeeLeaveAccountController {
         JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
 
         List<LeaveBalanceTransactionResponse> response = leaveBalanceService.getTransactions(details.organisationId(), id).stream().map(this::toTransactionResponse).toList();
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<List<EmployeeLeaveAccountResponse>> getOwnLeaveAccounts(Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        Employee employee = userService.resolveEmployee(details.organisationId(), details.userId());
+
+        List<EmployeeLeaveAccountResponse> response = employeeLeaveAccountService.getEmployeeLeaveAccounts(
+                details.organisationId(), employee.getId()).stream().map(this::toResponse).toList();
 
         return ResponseEntity.ok(response);
     }

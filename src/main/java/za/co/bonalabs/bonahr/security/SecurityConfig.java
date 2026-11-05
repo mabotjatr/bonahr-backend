@@ -26,6 +26,7 @@ public class SecurityConfig {
     public static final String API_V_1_LEAVE_POLICIES_UPDATE = "/api/v1/leave-policies/**";
     public static final String API_V_1_LEAVE_ACCOUNTS_POST = "/api/v1/leave-accounts";
     public static final String API_V_1_LEAVE_ACCOUNTS = "/api/v1/leave-accounts/**";
+    public static final String API_V_1_LEAVE_ACCOUNTS_ME = "/api/v1/leave-accounts/me";
 
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService) {
@@ -113,6 +114,9 @@ public class SecurityConfig {
                         .hasAnyRole(OWNER, HR_ADMIN)
 
                         // Leave accounts
+                        .requestMatchers(HttpMethod.GET,API_V_1_LEAVE_ACCOUNTS_ME)
+                        .hasRole(EMPLOYEE)
+
                         .requestMatchers(HttpMethod.POST, API_V_1_LEAVE_ACCOUNTS_POST)
                         .hasAnyRole(OWNER, HR_ADMIN)
 
