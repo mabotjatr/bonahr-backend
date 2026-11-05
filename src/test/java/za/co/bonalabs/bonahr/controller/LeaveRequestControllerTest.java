@@ -527,4 +527,73 @@ class LeaveRequestControllerTest {
                 .andExpect(jsonPath("$[0].employeeId").value(employeeA.getId().toString()))
                 .andExpect(jsonPath("$[0].reason").value("Jane leave"));
     }
+
+    @Test
+    void shouldAllowEmployeeToCancelOwnPendingLeaveRequest() throws Exception {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Employee Self Cancellation " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        User user = new User(organisation, "jane.cancel." + UUID.randomUUID() + "@example.com", "Jane", "Doe");
+
+        user.linkEmployee(employee);
+
+        user = userRepository.saveAndFlush(user);
+
+        LeaveRequest leaveRequest = leaveRequestService.createLeaveRequest(
+                organisation.getId(),
+                user.getId(),
+                new CreateLeaveRequestRequest(
+                        employee.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 9),
+                        LocalDate.of(2026, 11, 13),
+                        "Annual leave"));
+
+        String token = jwtService.generateToken(user.getId(), organisation.getId(), List.of("EMPLOYEE"));
+
+        mockMvc.perform(patch("/api/v1/leave-requests/me/{id}/cancel", leaveRequest.getId())
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(leaveRequest.getId().toString()))
+                .andExpect(jsonPath("$.employeeId").value(employee.getId().toString()))
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+    }
+
+    @Test
+    void shouldReturnNotFoundWhenEmployeeCancelsAnotherEmployeesLeaveRequest() throws Exception {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Employee Cancellation Ownership " + UUID.randomUUID()));
+
+        Employee employeeA = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        Employee employeeB = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "John", "Smith"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+
+        User userA = new User(organisation, "jane.cancel." + UUID.randomUUID() + "@example.com", "Jane", "Doe");
+
+        userA.linkEmployee(employeeA);
+
+        userA = userRepository.saveAndFlush(userA);
+
+        LeaveRequest employeeBLeave = leaveRequestService.createLeaveRequest(
+                organisation.getId(),
+                UUID.randomUUID(),
+                new CreateLeaveRequestRequest(
+                        employeeB.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 16),
+                        LocalDate.of(2026, 11, 20),
+                        "John annual leave"));
+
+        String token = jwtService.generateToken(userA.getId(), organisation.getId(), List.of("EMPLOYEE"));
+
+        mockMvc.perform(patch("/api/v1/leave-requests/me/{id}/cancel", employeeBLeave.getId())
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+    }
 }

@@ -27,6 +27,8 @@ public class SecurityConfig {
     public static final String API_V_1_LEAVE_ACCOUNTS_POST = "/api/v1/leave-accounts";
     public static final String API_V_1_LEAVE_ACCOUNTS = "/api/v1/leave-accounts/**";
     public static final String API_V_1_LEAVE_ACCOUNTS_ME = "/api/v1/leave-accounts/me";
+    public static final String API_V_1_LEAVE_REQUESTS_ME_UPDATE = "/api/v1/leave-requests/me/**";
+
 
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService) {
@@ -87,10 +89,14 @@ public class SecurityConfig {
                          * These must appear before
                          * /api/v1/leave-requests/**
                          * because the wildcard also matches "/me".
-                         */.requestMatchers(HttpMethod.POST, API_V_1_LEAVE_REQUESTS_ME)
+                         */
+                        .requestMatchers(HttpMethod.POST, API_V_1_LEAVE_REQUESTS_ME)
                         .hasRole(EMPLOYEE)
 
                         .requestMatchers(HttpMethod.GET, API_V_1_LEAVE_REQUESTS_ME)
+                        .hasRole(EMPLOYEE)
+
+                        .requestMatchers(HttpMethod.PATCH, API_V_1_LEAVE_REQUESTS_ME_UPDATE)
                         .hasRole(EMPLOYEE)
 
                         // HR / Owner leave request endpoints

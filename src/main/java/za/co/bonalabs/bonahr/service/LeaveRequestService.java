@@ -161,6 +161,25 @@ public class LeaveRequestService {
         return leaveRequestRepository.findAllByOrganisationIdAndEmployeeIdOrderByStartDateAsc(organisationId, employeeId);
     }
 
+    @Transactional
+    public LeaveRequest cancelOwnLeaveRequest(UUID organisationId, UUID employeeId, UUID leaveRequestId, UUID cancelledByUserId) {
+
+        LeaveRequest leaveRequest = leaveRequestRepository.findByIdAndOrganisationIdAndEmployeeId(
+                leaveRequestId,
+                organisationId,
+                employeeId).orElseThrow(() -> new ResourceNotFoundException("Leave request not found: " + leaveRequestId));
+
+        leaveRequest.cancel();
+
+        LeaveRequest savedLeaveRequest = leaveRequestRepository.saveAndFlush(leaveRequest);
+
+        BigDecimal requestedDays = calculateRequestedDays(savedLeaveRequest);
+
+        leaveBalanceService.releaseLeaveDays(organisationId, savedLeaveRequest, requestedDays, cancelledByUserId);
+
+        return savedLeaveRequest;
+    }
+
     private BigDecimal calculateRequestedDays(LeaveRequest leaveRequest) {
         return leaveDayCalculator.calculate(leaveRequest.getStartDate(), leaveRequest.getEndDate(), leaveRequest.getDayPortion());
     }

@@ -122,6 +122,18 @@ public class LeaveRequestController {
         return ResponseEntity.ok(response);
     }
 
+    @PatchMapping("/me/{id}/cancel")
+    public ResponseEntity<LeaveRequestResponse> cancelOwnLeaveRequest(@PathVariable UUID id, Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        Employee employee = userService.resolveEmployee(details.organisationId(), details.userId());
+
+        LeaveRequest leaveRequest = leaveRequestService.cancelOwnLeaveRequest(details.organisationId(), employee.getId(), id, details.userId());
+
+        return ResponseEntity.ok(toResponse(leaveRequest));
+    }
+
     private LeaveRequestResponse toResponse(LeaveRequest leaveRequest) {
         return new LeaveRequestResponse(
                 leaveRequest.getId(),

@@ -23,4 +23,6 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, UUID
             LocalDate startDate);
 
     List<LeaveRequest> findAllByOrganisationIdAndEmployeeIdOrderByStartDateAsc(UUID organisationId, UUID employeeId);
+
+    Optional<LeaveRequest> findByIdAndOrganisationIdAndEmployeeId(UUID id, UUID organisationId, UUID employeeId);
 }
