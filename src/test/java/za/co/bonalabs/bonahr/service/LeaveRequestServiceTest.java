@@ -463,29 +463,30 @@ class LeaveRequestServiceTest {
     }
 
     @Test
-    void shouldRejectCancellingApprovedLeaveRequest() {
+    void shouldRestoreApprovedBalanceWhenCancellingApprovedLeaveRequest() {
 
         Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Approved Leave Cancellation Company " + UUID.randomUUID()));
 
         Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
 
-        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true));
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL-" + UUID.randomUUID(), "Annual Leave", true, true));
+
+        UUID requestedByUserId = UUID.randomUUID();
+        UUID approvedByUserId = UUID.randomUUID();
+        UUID cancelledByUserId = UUID.randomUUID();
 
         LeaveRequest leaveRequest = leaveRequestService.createLeaveRequest(
                 organisation.getId(),
-                UUID.randomUUID(),
-                new CreateLeaveRequestRequest(
-                        employee.getId(),
-                        leaveType.getId(),
-                        LocalDate.of(2026, 12, 7),
-                        LocalDate.of(2026, 12, 11),
-                        "December leave"));
+                requestedByUserId,
+                new CreateLeaveRequestRequest(employee.getId(), leaveType.getId(), LocalDate.of(2026, 11, 9), LocalDate.of(2026, 11, 13), "Annual leave"));
 
-        leaveRequestService.approveLeaveRequest(organisation.getId(), leaveRequest.getId(), UUID.randomUUID(), "Approved");
+        leaveRequestService.approveLeaveRequest(organisation.getId(), leaveRequest.getId(), approvedByUserId, "Approved");
 
-        UUID cancelledByUserId = UUID.randomUUID();
+        LeaveRequest cancelled = leaveRequestService.cancelLeaveRequest(organisation.getId(), leaveRequest.getId(), cancelledByUserId);
 
-        assertThrows(IllegalStateException.class, () -> leaveRequestService.cancelLeaveRequest(organisation.getId(), leaveRequest.getId(), cancelledByUserId));
+        assertEquals(LeaveRequestStatus.CANCELLED, cancelled.getStatus());
+
+        verify(leaveBalanceService).restoreApprovedLeaveDays(organisation.getId(), leaveRequest, new BigDecimal("5"), cancelledByUserId);
     }
 
     @Test
@@ -995,5 +996,37 @@ class LeaveRequestServiceTest {
                         eq(BigDecimal.valueOf(4)),
                         eq(requestedByUserId)
                 );
+    }
+
+    @Test
+    void shouldRestoreApprovedBalanceWhenEmployeeCancelsOwnLeaveRequest() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Own Approved Leave Cancellation " + UUID.randomUUID()));
+
+        Employee employee = employeeRepository.saveAndFlush(new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe"));
+
+        LeaveType leaveType = leaveTypeRepository.saveAndFlush(new LeaveType(organisation, "ANNUAL-" + UUID.randomUUID(), "Annual Leave", true, true));
+
+        UUID requestedByUserId = UUID.randomUUID();
+        UUID approvedByUserId = UUID.randomUUID();
+        UUID cancelledByUserId = UUID.randomUUID();
+
+        LeaveRequest leaveRequest = leaveRequestService.createLeaveRequest(
+                organisation.getId(),
+                requestedByUserId,
+                new CreateLeaveRequestRequest(
+                        employee.getId(),
+                        leaveType.getId(),
+                        LocalDate.of(2026, 11, 9),
+                        LocalDate.of(2026, 11, 13),
+                        "Annual leave"));
+
+        leaveRequestService.approveLeaveRequest(organisation.getId(), leaveRequest.getId(), approvedByUserId, "Approved");
+
+        LeaveRequest cancelled = leaveRequestService.cancelOwnLeaveRequest(organisation.getId(), employee.getId(), leaveRequest.getId(), cancelledByUserId);
+
+        assertEquals(LeaveRequestStatus.CANCELLED, cancelled.getStatus());
+
+        verify(leaveBalanceService).restoreApprovedLeaveDays(organisation.getId(), leaveRequest, new BigDecimal("5"), cancelledByUserId);
     }
 }

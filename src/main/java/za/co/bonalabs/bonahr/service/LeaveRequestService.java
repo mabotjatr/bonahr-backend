@@ -145,13 +145,22 @@ public class LeaveRequestService {
 
         LeaveRequest leaveRequest = getLeaveRequest(organisationId, leaveRequestId);
 
+        LeaveRequestStatus statusBeforeCancellation = leaveRequest.getStatus();
+
         leaveRequest.cancel();
 
         LeaveRequest savedLeaveRequest = leaveRequestRepository.saveAndFlush(leaveRequest);
 
         BigDecimal requestedDays = calculateRequestedDays(savedLeaveRequest);
 
-        leaveBalanceService.releaseLeaveDays(organisationId, leaveRequest, requestedDays, cancelledByUserId);
+        if (statusBeforeCancellation == LeaveRequestStatus.APPROVED) {
+
+            leaveBalanceService.restoreApprovedLeaveDays(organisationId, savedLeaveRequest, requestedDays, cancelledByUserId);
+
+        } else {
+
+            leaveBalanceService.releaseLeaveDays(organisationId, savedLeaveRequest, requestedDays, cancelledByUserId);
+        }
 
         return savedLeaveRequest;
     }
@@ -169,13 +178,22 @@ public class LeaveRequestService {
                 organisationId,
                 employeeId).orElseThrow(() -> new ResourceNotFoundException("Leave request not found: " + leaveRequestId));
 
+        LeaveRequestStatus statusBeforeCancellation = leaveRequest.getStatus();
+
         leaveRequest.cancel();
 
         LeaveRequest savedLeaveRequest = leaveRequestRepository.saveAndFlush(leaveRequest);
 
         BigDecimal requestedDays = calculateRequestedDays(savedLeaveRequest);
 
-        leaveBalanceService.releaseLeaveDays(organisationId, savedLeaveRequest, requestedDays, cancelledByUserId);
+        if (statusBeforeCancellation == LeaveRequestStatus.APPROVED) {
+
+            leaveBalanceService.restoreApprovedLeaveDays(organisationId, savedLeaveRequest, requestedDays, cancelledByUserId);
+
+        } else {
+
+            leaveBalanceService.releaseLeaveDays(organisationId, savedLeaveRequest, requestedDays, cancelledByUserId);
+        }
 
         return savedLeaveRequest;
     }

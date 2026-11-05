@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.*;
 
 class EmployeeLeaveAccountTest {
@@ -430,5 +433,53 @@ class EmployeeLeaveAccountTest {
         assertEquals(0, account.getCurrentBalance().compareTo(BigDecimal.ZERO));
 
         assertEquals(0, account.getReservedDays().compareTo(new BigDecimal("2.0000")));
+    }
+
+    @Test
+    void shouldRestoreBalanceWhenApprovedLeaveIsCancelled() {
+
+        Organisation organisation = new Organisation("Test Organisation");
+
+        Employee employee = new Employee(organisation, "EMP-001", "Jane", "Doe");
+
+        LeaveType leaveType = new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true);
+
+        LeavePolicy leavePolicy = new LeavePolicy(organisation, leaveType, LeaveAccrualMethod.MONTHLY, new BigDecimal("1.2500"), false, BigDecimal.ZERO);
+
+        EmployeeLeaveAccount account = new EmployeeLeaveAccount(organisation, employee, leaveType, leavePolicy);
+
+        account.applyAccrual(new BigDecimal("10.0000"), LocalDate.of(2026, 1, 1));
+
+        account.reserveDays(new BigDecimal("5.0000"));
+
+        account.approveReservedDays(new BigDecimal("5.0000"));
+
+        assertThat(account.getCurrentBalance()).isEqualByComparingTo("5.0000");
+
+        assertThat(account.getReservedDays()).isEqualByComparingTo("0");
+
+        account.restoreApprovedDays(new BigDecimal("5.0000"));
+
+        assertThat(account.getCurrentBalance()).isEqualByComparingTo("10.0000");
+
+        assertThat(account.getReservedDays()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void shouldRejectNonPositiveApprovedLeaveRestoration() {
+
+        Organisation organisation = new Organisation("Test Organisation");
+
+        Employee employee = new Employee(organisation, "EMP-001", "Jane", "Doe");
+
+        LeaveType leaveType = new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true);
+
+        LeavePolicy leavePolicy = new LeavePolicy(organisation, leaveType, LeaveAccrualMethod.MONTHLY, new BigDecimal("1.2500"), false, BigDecimal.ZERO);
+
+        EmployeeLeaveAccount account = new EmployeeLeaveAccount(organisation, employee, leaveType, leavePolicy);
+
+        assertThatThrownBy(() -> account.restoreApprovedDays(BigDecimal.ZERO)).isInstanceOf(IllegalArgumentException.class).hasMessage("Restored days must be greater than zero");
+
+        assertThatThrownBy(() -> account.restoreApprovedDays(new BigDecimal("-1.0000"))).isInstanceOf(IllegalArgumentException.class).hasMessage("Restored days must be greater than zero");
     }
 }

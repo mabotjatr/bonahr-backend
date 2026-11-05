@@ -650,4 +650,67 @@ class LeaveBalanceServiceTest {
 
         assertSame(adjustment, result.get(1));
     }
+
+    @Test
+    void shouldRestoreApprovedLeaveDaysAndCreateLedgerTransaction() {
+
+        Organisation organisation = new Organisation("Approved Leave Restoration Service Company");
+
+        Employee employee = new Employee(organisation, "EMP001", "John", "Doe");
+
+        LeaveType leaveType = new LeaveType(organisation, "ANNUAL", "Annual Leave", true, true);
+
+        LeavePolicy leavePolicy = new LeavePolicy(organisation, leaveType, LeaveAccrualMethod.MONTHLY, new BigDecimal("1.2500"), false, BigDecimal.ZERO);
+
+        EmployeeLeaveAccount account = new EmployeeLeaveAccount(organisation, employee, leaveType, leavePolicy);
+
+        // Starting balance = 10 days.
+        account.applyAccrual(new BigDecimal("10.0000"), LocalDate.of(2026, 1, 1));
+
+        // Simulate approved 2-day leave.
+        account.reserveDays(new BigDecimal("2.0000"));
+
+        account.approveReservedDays(new BigDecimal("2.0000"));
+
+        assertEquals(0, account.getCurrentBalance().compareTo(new BigDecimal("8.0000")));
+
+        assertEquals(0, account.getReservedDays().compareTo(BigDecimal.ZERO));
+
+        LeaveRequest leaveRequest = new LeaveRequest(organisation, employee, leaveType, LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 11), "Annual leave", UUID.randomUUID());
+
+        leaveRequest.approve(UUID.randomUUID(), "Approved");
+
+        UUID organisationId = UUID.randomUUID();
+        UUID actorUserId = UUID.randomUUID();
+
+        when(employeeLeaveAccountRepository.findByOrganisationIdAndEmployeeIdAndLeaveTypeId(organisationId, employee.getId(), leaveType.getId())).thenReturn(Optional.of(account));
+
+        leaveBalanceService.restoreApprovedLeaveDays(organisationId, leaveRequest, new BigDecimal("2.0000"), actorUserId);
+
+        assertEquals(0, account.getCurrentBalance().compareTo(new BigDecimal("10.0000")));
+
+        assertEquals(0, account.getReservedDays().compareTo(BigDecimal.ZERO));
+
+        verify(employeeLeaveAccountRepository).saveAndFlush(account);
+
+        ArgumentCaptor<LeaveBalanceTransaction> captor = ArgumentCaptor.forClass(LeaveBalanceTransaction.class);
+
+        verify(leaveBalanceTransactionRepository).saveAndFlush(captor.capture());
+
+        LeaveBalanceTransaction transaction = captor.getValue();
+
+        assertEquals(LeaveBalanceTransactionType.LEAVE_APPROVAL_RESTORED, transaction.getTransactionType());
+
+        assertEquals(0, transaction.getAmount().compareTo(new BigDecimal("2.0000")));
+
+        assertEquals(0, transaction.getBalanceAfter().compareTo(new BigDecimal("10.0000")));
+
+        assertEquals(0, transaction.getReservedAfter().compareTo(BigDecimal.ZERO));
+
+        assertEquals(leaveRequest, transaction.getLeaveRequest());
+
+        assertEquals(actorUserId, transaction.getActorUserId());
+
+        assertEquals("Approved leave cancellation restored", transaction.getComment());
+    }
 }

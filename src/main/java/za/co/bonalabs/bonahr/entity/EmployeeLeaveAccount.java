@@ -109,6 +109,17 @@ public class EmployeeLeaveAccount {
         this.currentBalance = this.currentBalance.subtract(days);
     }
 
+    public void restoreApprovedDays(BigDecimal days) {
+
+        if (days == null || days.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException(
+                    "Restored days must be greater than zero"
+            );
+        }
+
+        this.currentBalance = this.currentBalance.add(days);
+    }
+
     public void applyAccrual(BigDecimal amount, LocalDate accrualDate) {
 
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {

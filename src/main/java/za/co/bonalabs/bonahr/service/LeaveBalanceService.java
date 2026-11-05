@@ -118,6 +118,20 @@ public class LeaveBalanceService {
         return leaveBalanceTransactionRepository.findAllByOrganisationIdAndLeaveAccountIdOrderByCreatedAtAsc(organisationId, accountId);
     }
 
+    @Transactional
+    public void restoreApprovedLeaveDays(UUID organisationId, LeaveRequest leaveRequest, BigDecimal days, UUID actorUserId) {
+
+        EmployeeLeaveAccount account = getLeaveAccount(organisationId, leaveRequest.getEmployee().getId(), leaveRequest.getLeaveType().getId());
+
+        validateLeaveRequestMatchesAccount(account, leaveRequest);
+
+        account.restoreApprovedDays(days);
+
+        employeeLeaveAccountRepository.saveAndFlush(account);
+
+        recordTransaction(account, leaveRequest, LeaveBalanceTransactionType.LEAVE_APPROVAL_RESTORED, days, actorUserId, "Approved leave cancellation restored");
+    }
+
     private void releaseLeaveDays(EmployeeLeaveAccount account, LeaveRequest leaveRequest, BigDecimal days, UUID actorUserId) {
 
         validateLeaveRequestMatchesAccount(account, leaveRequest);

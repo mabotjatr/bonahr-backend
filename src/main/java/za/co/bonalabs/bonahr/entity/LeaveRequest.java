@@ -124,8 +124,10 @@ public class LeaveRequest {
 
     public void cancel() {
 
-        if (status != LeaveRequestStatus.PENDING) {
-            throw new IllegalStateException( "Only pending leave requests can be cancelled");
+        if (status != LeaveRequestStatus.PENDING  && status != LeaveRequestStatus.APPROVED) {
+            throw new IllegalStateException(
+                    "Only pending or approved leave requests can be cancelled"
+            );
         }
 
         this.status = LeaveRequestStatus.CANCELLED;

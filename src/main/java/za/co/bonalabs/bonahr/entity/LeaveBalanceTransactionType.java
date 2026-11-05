@@ -10,5 +10,7 @@ public enum LeaveBalanceTransactionType {
 
     LEAVE_APPROVED,
 
+    LEAVE_APPROVAL_RESTORED,
+
     MANUAL_ADJUSTMENT
 }
