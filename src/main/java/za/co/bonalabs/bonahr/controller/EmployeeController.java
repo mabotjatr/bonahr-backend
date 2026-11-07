@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import za.co.bonalabs.bonahr.dto.employee.EmployeePageResponse;
 import za.co.bonalabs.bonahr.dto.employee.*;
+import za.co.bonalabs.bonahr.dto.user.EmployeeUserAccountResponse;
 import za.co.bonalabs.bonahr.entity.*;
 import za.co.bonalabs.bonahr.security.JwtAuthenticationDetails;
 import za.co.bonalabs.bonahr.service.EmployeeAuditService;
@@ -17,6 +18,7 @@ import za.co.bonalabs.bonahr.service.EmployeeDocumentService;
 import za.co.bonalabs.bonahr.service.EmployeeService;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
+import za.co.bonalabs.bonahr.service.UserService;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -32,11 +34,13 @@ public class EmployeeController {
     private final EmployeeService employeeService;
     private final EmployeeAuditService employeeAuditService;
     private final EmployeeDocumentService employeeDocumentService;
+    private final UserService userService;
 
-    public EmployeeController(EmployeeService employeeService, EmployeeAuditService employeeAuditService, EmployeeDocumentService employeeDocumentService) {
+    public EmployeeController(EmployeeService employeeService, EmployeeAuditService employeeAuditService, EmployeeDocumentService employeeDocumentService, UserService userService) {
         this.employeeService = employeeService;
         this.employeeAuditService = employeeAuditService;
         this.employeeDocumentService = employeeDocumentService;
+        this.userService = userService;
     }
 
     @PostMapping
@@ -233,5 +237,22 @@ public class EmployeeController {
         employeeDocumentService.deleteEmployeeDocument(details.organisationId(), employeeId, documentId);
 
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{employeeId}/user-account")
+    public ResponseEntity<EmployeeUserAccountResponse> provisionUserAccount(@PathVariable UUID employeeId, Authentication authentication) {
+
+        JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
+
+        User user = userService.provisionEmployeeAccount(details.organisationId(), employeeId);
+
+        EmployeeUserAccountResponse response = new EmployeeUserAccountResponse(
+                user.getId(),
+                user.getEmployee().getId(),
+                user.getEmail(),
+                user.getStatus().name(),
+                user.getRoles().stream().map(Role::getName).sorted().toList());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

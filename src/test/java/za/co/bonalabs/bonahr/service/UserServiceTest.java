@@ -5,12 +5,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import za.co.bonalabs.bonahr.entity.Organisation;
-import za.co.bonalabs.bonahr.entity.User;
+import za.co.bonalabs.bonahr.entity.*;
+import za.co.bonalabs.bonahr.exception.DuplicateResourceException;
+import za.co.bonalabs.bonahr.exception.InvalidUserProvisioningException;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 import za.co.bonalabs.bonahr.repository.UserRepository;
-import za.co.bonalabs.bonahr.entity.Employee;
 import za.co.bonalabs.bonahr.repository.EmployeeRepository;
 
 import java.util.UUID;
@@ -212,5 +212,138 @@ class UserServiceTest {
         assertThat(linkedAgain.getEmployee()).isNotNull();
 
         assertThat(linkedAgain.getEmployee().getId()).isEqualTo(employee.getId());
+    }
+
+    @Test
+    void shouldProvisionEmployeeUserAccount() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Employee Provisioning Organisation " + UUID.randomUUID()));
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe");
+
+        employee.setEmail("jane.provision." + UUID.randomUUID() + "@example.com");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        User user = userService.provisionEmployeeAccount(organisation.getId(), employee.getId());
+
+        assertThat(user.getId()).isNotNull();
+
+        assertThat(user.getOrganisation().getId()).isEqualTo(organisation.getId());
+
+        assertThat(user.getEmployee()).isNotNull();
+
+        assertThat(user.getEmployee().getId()).isEqualTo(employee.getId());
+
+        assertThat(user.getEmail()).isEqualTo(employee.getEmail());
+
+        assertThat(user.getFirstName()).isEqualTo(employee.getFirstName());
+
+        assertThat(user.getLastName()).isEqualTo(employee.getLastName());
+
+        assertThat(user.getStatus()).isEqualTo(UserStatus.INVITED);
+
+        assertThat(user.getPasswordHash()).isNull();
+
+        assertThat(user.getRoles()).extracting(Role::getName).containsExactly("EMPLOYEE");
+    }
+
+    @Test
+    void shouldRejectProvisioningEmployeeWhoAlreadyHasUserAccount() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Duplicate Employee Provisioning " + UUID.randomUUID()));
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe");
+
+        employee.setEmail("jane.duplicate." + UUID.randomUUID() + "@example.com");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        userService.provisionEmployeeAccount(organisation.getId(), employee.getId());
+
+        UUID employeeId = employee.getId();
+
+        assertThatThrownBy(() -> userService.provisionEmployeeAccount(organisation.getId(), employeeId))
+                .isInstanceOf(DuplicateResourceException.class).hasMessage("Employee already has a user account");
+    }
+
+    @Test
+    void shouldRejectProvisioningWhenEmployeeEmailAlreadyBelongsToAnotherUser() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Duplicate Provisioning Email " + UUID.randomUUID()));
+
+        String email = "duplicate.email." + UUID.randomUUID() + "@example.com";
+
+        User existingUser = new User(organisation, email, "Existing", "User");
+
+        userRepository.saveAndFlush(existingUser);
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe");
+
+        employee.setEmail(email);
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        UUID employeeId = employee.getId();
+
+        assertThatThrownBy(() -> userService.provisionEmployeeAccount(organisation.getId(), employeeId))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessage("User email already exists: " + email);
+    }
+
+    @Test
+    void shouldRejectProvisioningEmployeeWithoutEmail() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Provision Employee Without Email " + UUID.randomUUID()));
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        UUID employeeId = employee.getId();
+
+        assertThatThrownBy(() -> userService.provisionEmployeeAccount(organisation.getId(), employeeId))
+                .isInstanceOf(InvalidUserProvisioningException.class)
+                .hasMessage("Employee must have an email address before provisioning a user account");
+    }
+
+    @Test
+    void shouldRejectProvisioningEmployeeFromAnotherOrganisation() {
+
+        Organisation organisationA = organisationRepository.saveAndFlush(new Organisation("Provisioning Tenant A " + UUID.randomUUID()));
+
+        Organisation organisationB = organisationRepository.saveAndFlush(new Organisation("Provisioning Tenant B " + UUID.randomUUID()));
+
+        Employee employee = new Employee(organisationB, "EMP-" + UUID.randomUUID(), "Jane", "Doe");
+
+        employee.setEmail("cross.tenant." + UUID.randomUUID() + "@example.com");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        UUID employeeId = employee.getId();
+
+        assertThatThrownBy(() -> userService.provisionEmployeeAccount(organisationA.getId(), employeeId))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Employee not found: " + employeeId);
+    }
+
+    @Test
+    void shouldRejectProvisioningInactiveEmployee() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Inactive Employee Provisioning " + UUID.randomUUID()));
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe");
+
+        employee.setEmail("inactive." + UUID.randomUUID() + "@example.com");
+
+        employee.setStatus(EmployeeStatus.INACTIVE);
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        UUID employeeId = employee.getId();
+
+        assertThatThrownBy(() -> userService.provisionEmployeeAccount(organisation.getId(), employeeId))
+                .isInstanceOf(InvalidUserProvisioningException.class)
+                .hasMessage("Only active employees can be provisioned with a user account");
     }
 }

@@ -23,4 +23,16 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public void handleInvalidCredentials() {
     }
+
+    @ExceptionHandler(DuplicateResourceException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse handleDuplicateResource(DuplicateResourceException exception) {
+        return new ErrorResponse("RESOURCE_CONFLICT", exception.getMessage(), OffsetDateTime.now());
+    }
+
+    @ExceptionHandler(InvalidUserProvisioningException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleInvalidUserProvisioning(InvalidUserProvisioningException exception) {
+        return new ErrorResponse("INVALID_USER_PROVISIONING", exception.getMessage(), OffsetDateTime.now());
+    }
 }

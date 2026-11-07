@@ -4,8 +4,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.entity.Employee;
+import za.co.bonalabs.bonahr.entity.EmployeeStatus;
+import za.co.bonalabs.bonahr.entity.Role;
 import za.co.bonalabs.bonahr.entity.User;
+import za.co.bonalabs.bonahr.exception.DuplicateResourceException;
+import za.co.bonalabs.bonahr.exception.InvalidUserProvisioningException;
 import za.co.bonalabs.bonahr.repository.EmployeeRepository;
+import za.co.bonalabs.bonahr.repository.RoleRepository;
 import za.co.bonalabs.bonahr.repository.UserRepository;
 import za.co.bonalabs.bonahr.exception.ResourceNotFoundException;
 
@@ -17,11 +22,13 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmployeeRepository employeeRepository;
+    private final RoleRepository roleRepository;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, EmployeeRepository employeeRepository) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, EmployeeRepository employeeRepository, RoleRepository roleRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.employeeRepository = employeeRepository;
+        this.roleRepository = roleRepository;
     }
 
     @Transactional
@@ -72,6 +79,42 @@ public class UserService {
                             "Employee is already linked to another user"
                     );
                 });
+
+        user.linkEmployee(employee);
+
+        return userRepository.saveAndFlush(user);
+    }
+
+    @Transactional
+    public User provisionEmployeeAccount(UUID organisationId, UUID employeeId) {
+
+        Employee employee = employeeRepository.findByIdAndOrganisationId( employeeId,organisationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found: " + employeeId));
+
+        if (employee.getStatus() != EmployeeStatus.ACTIVE) {
+            throw new InvalidUserProvisioningException(
+                    "Only active employees can be provisioned with a user account"
+            );
+        }
+
+        userRepository.findByEmployeeId(employeeId)
+                .ifPresent(existingUser -> {
+                    throw new DuplicateResourceException("Employee already has a user account");
+                });
+
+        if (employee.getEmail() == null || employee.getEmail().isBlank()) {
+            throw new InvalidUserProvisioningException("Employee must have an email address before provisioning a user account");
+        }
+
+        if (userRepository.existsByOrganisationIdAndEmail(organisationId, employee.getEmail())) {
+            throw new DuplicateResourceException("User email already exists: " + employee.getEmail());
+        }
+
+        Role employeeRole = roleRepository.findByName("EMPLOYEE").orElseThrow(() -> new IllegalStateException("EMPLOYEE role is not configured"));
+
+        User user = new User(employee.getOrganisation(), employee.getEmail(), employee.getFirstName(), employee.getLastName());
+
+        user.addRole(employeeRole);
 
         user.linkEmployee(employee);
 
