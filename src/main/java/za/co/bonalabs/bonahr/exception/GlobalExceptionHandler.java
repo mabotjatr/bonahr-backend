@@ -35,4 +35,10 @@ public class GlobalExceptionHandler {
     public ErrorResponse handleInvalidUserProvisioning(InvalidUserProvisioningException exception) {
         return new ErrorResponse("INVALID_USER_PROVISIONING", exception.getMessage(), OffsetDateTime.now());
     }
+
+    @ExceptionHandler(InvalidUserInvitationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleInvalidUserInvitation(InvalidUserInvitationException exception) {
+        return new ErrorResponse("INVALID_USER_INVITATION", exception.getMessage(), OffsetDateTime.now());
+    }
 }

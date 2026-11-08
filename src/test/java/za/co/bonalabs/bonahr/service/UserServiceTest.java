@@ -346,4 +346,34 @@ class UserServiceTest {
                 .isInstanceOf(InvalidUserProvisioningException.class)
                 .hasMessage("Only active employees can be provisioned with a user account");
     }
+
+    @Test
+    void shouldProvisionEmployeeAccountWithInvitation() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Provision Employee With Invitation " + UUID.randomUUID()));
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe");
+
+        employee.setEmail("invited.employee." + UUID.randomUUID() + "@example.com");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        UserService.ProvisionedEmployeeAccount provisioned = userService.provisionEmployeeAccountWithInvitation(organisation.getId(), employee.getId());
+
+        assertThat(provisioned.user().getId()).isNotNull();
+
+        assertThat(provisioned.user().getStatus()).isEqualTo(UserStatus.INVITED);
+
+        assertThat(provisioned.user().getEmployee().getId()).isEqualTo(employee.getId());
+
+        assertThat(provisioned.invitation()).isNotNull();
+
+        assertThat(provisioned.invitation().invitation().getId()).isNotNull();
+
+        assertThat(provisioned.invitation().invitation().getUser().getId()).isEqualTo(provisioned.user().getId());
+
+        assertThat(provisioned.invitation().rawToken()).isNotBlank();
+
+        assertThat(provisioned.invitation().invitation().getTokenHash()).isNotEqualTo(provisioned.invitation().rawToken());
+    }
 }

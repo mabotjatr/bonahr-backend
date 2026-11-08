@@ -6,18 +6,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
-import za.co.bonalabs.bonahr.entity.Employee;
-import za.co.bonalabs.bonahr.entity.EmployeeStatus;
-import za.co.bonalabs.bonahr.entity.Organisation;
-import za.co.bonalabs.bonahr.entity.User;
+import za.co.bonalabs.bonahr.entity.*;
 import za.co.bonalabs.bonahr.repository.EmployeeRepository;
 import za.co.bonalabs.bonahr.repository.OrganisationRepository;
+import za.co.bonalabs.bonahr.repository.UserInvitationRepository;
 import za.co.bonalabs.bonahr.repository.UserRepository;
 import za.co.bonalabs.bonahr.security.JwtService;
 
 import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -42,6 +41,9 @@ class EmployeeUserAccountControllerTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private UserInvitationRepository userInvitationRepository;
+
     @Test
     void shouldAllowHrAdminToProvisionEmployeeUserAccount() throws Exception {
 
@@ -62,6 +64,15 @@ class EmployeeUserAccountControllerTest {
                 .andExpect(jsonPath("$.email").value(employee.getEmail()))
                 .andExpect(jsonPath("$.status").value("INVITED"))
                 .andExpect(jsonPath("$.roles[0]").value("EMPLOYEE"));
+
+        User provisionedUser = userRepository.findByEmployeeId(employee.getId())
+                        .orElseThrow();
+
+        List<UserInvitation> invitations = userInvitationRepository.findAllByUserIdAndUsedAtIsNullAndRevokedAtIsNull(provisionedUser.getId());
+
+        assertThat(invitations).hasSize(1);
+
+        assertThat(invitations.getFirst().getTokenHash()).isNotBlank();
     }
 
     @Test

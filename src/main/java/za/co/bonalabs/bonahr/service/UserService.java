@@ -23,12 +23,19 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final EmployeeRepository employeeRepository;
     private final RoleRepository roleRepository;
+    private final UserInvitationService userInvitationService;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, EmployeeRepository employeeRepository, RoleRepository roleRepository) {
+    public UserService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            EmployeeRepository employeeRepository,
+            RoleRepository roleRepository,
+            UserInvitationService userInvitationService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.employeeRepository = employeeRepository;
         this.roleRepository = roleRepository;
+        this.userInvitationService = userInvitationService;
     }
 
     @Transactional
@@ -92,9 +99,7 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found: " + employeeId));
 
         if (employee.getStatus() != EmployeeStatus.ACTIVE) {
-            throw new InvalidUserProvisioningException(
-                    "Only active employees can be provisioned with a user account"
-            );
+            throw new InvalidUserProvisioningException("Only active employees can be provisioned with a user account");
         }
 
         userRepository.findByEmployeeId(employeeId)
@@ -119,5 +124,21 @@ public class UserService {
         user.linkEmployee(employee);
 
         return userRepository.saveAndFlush(user);
+    }
+
+    @Transactional
+    public ProvisionedEmployeeAccount provisionEmployeeAccountWithInvitation(UUID organisationId, UUID employeeId) {
+
+        User user = provisionEmployeeAccount(organisationId, employeeId);
+
+        UserInvitationService.CreatedInvitation invitation = userInvitationService.createInvitation(organisationId, user.getId());
+
+        return new ProvisionedEmployeeAccount(user, invitation);
+    }
+
+    public record ProvisionedEmployeeAccount(
+            User user,
+            UserInvitationService.CreatedInvitation invitation
+    ) {
     }
 }

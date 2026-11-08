@@ -14,13 +14,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.entity.*;
-import za.co.bonalabs.bonahr.repository.EmployeeAuditLogRepository;
-import za.co.bonalabs.bonahr.repository.OrganisationRepository;
+import za.co.bonalabs.bonahr.repository.*;
 import za.co.bonalabs.bonahr.security.JwtService;
-import za.co.bonalabs.bonahr.repository.EmployeeRepository;
 import za.co.bonalabs.bonahr.entity.EmployeeDocument;
 import za.co.bonalabs.bonahr.entity.EmployeeDocumentType;
-import za.co.bonalabs.bonahr.repository.EmployeeDocumentRepository;
 import za.co.bonalabs.bonahr.storage.FileStorageService;
 import za.co.bonalabs.bonahr.storage.StoredFile;
 
@@ -65,6 +62,12 @@ class EmployeeControllerTest {
 
     @MockitoBean
     private FileStorageService fileStorageService;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private UserInvitationRepository userInvitationRepository;
 
     private String createAccessToken(UUID userId, UUID organisationId, List<String> roles) {
         return jwtService.generateToken(userId, organisationId, roles);

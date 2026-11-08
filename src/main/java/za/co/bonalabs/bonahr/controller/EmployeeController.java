@@ -244,7 +244,9 @@ public class EmployeeController {
 
         JwtAuthenticationDetails details = (JwtAuthenticationDetails) authentication.getDetails();
 
-        User user = userService.provisionEmployeeAccount(details.organisationId(), employeeId);
+        UserService.ProvisionedEmployeeAccount provisioned = userService.provisionEmployeeAccountWithInvitation( details.organisationId(),employeeId );
+
+        User user = provisioned.user();
 
         EmployeeUserAccountResponse response = new EmployeeUserAccountResponse(
                 user.getId(),
