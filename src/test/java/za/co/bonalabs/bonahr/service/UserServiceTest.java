@@ -3,6 +3,7 @@ package za.co.bonalabs.bonahr.service;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import za.co.bonalabs.bonahr.entity.*;
@@ -17,6 +18,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 @Transactional
@@ -36,6 +38,9 @@ class UserServiceTest {
 
     @Autowired
     private EmployeeRepository employeeRepository;
+
+    @MockitoBean
+    private InvitationDeliveryService invitationDeliveryService;
 
     @Test
     void shouldHashUserPassword() {
@@ -375,5 +380,21 @@ class UserServiceTest {
         assertThat(provisioned.invitation().rawToken()).isNotBlank();
 
         assertThat(provisioned.invitation().invitation().getTokenHash()).isNotEqualTo(provisioned.invitation().rawToken());
+    }
+
+    @Test
+    void shouldDeliverInvitationWhenProvisioningEmployeeAccount() {
+
+        Organisation organisation = organisationRepository.saveAndFlush(new Organisation("Invitation Delivery " + UUID.randomUUID()));
+
+        Employee employee = new Employee(organisation, "EMP-" + UUID.randomUUID(), "Jane", "Doe");
+
+        employee.setEmail("delivery." + UUID.randomUUID() + "@example.com");
+
+        employee = employeeRepository.saveAndFlush(employee);
+
+        UserService.ProvisionedEmployeeAccount provisioned = userService.provisionEmployeeAccountWithInvitation(organisation.getId(), employee.getId());
+
+        verify(invitationDeliveryService).sendSetupInvitation(provisioned.user(), provisioned.invitation().rawToken());
     }
 }

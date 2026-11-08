@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import za.co.bonalabs.bonahr.entity.*;
@@ -12,6 +13,7 @@ import za.co.bonalabs.bonahr.repository.OrganisationRepository;
 import za.co.bonalabs.bonahr.repository.UserInvitationRepository;
 import za.co.bonalabs.bonahr.repository.UserRepository;
 import za.co.bonalabs.bonahr.security.JwtService;
+import za.co.bonalabs.bonahr.service.InvitationEmailSender;
 
 import java.util.List;
 import java.util.UUID;
@@ -43,6 +45,9 @@ class EmployeeUserAccountControllerTest {
 
     @Autowired
     private UserInvitationRepository userInvitationRepository;
+
+    @MockitoBean
+    private InvitationEmailSender invitationEmailSender;
 
     @Test
     void shouldAllowHrAdminToProvisionEmployeeUserAccount() throws Exception {

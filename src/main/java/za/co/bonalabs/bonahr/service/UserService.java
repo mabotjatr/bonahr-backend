@@ -24,18 +24,21 @@ public class UserService {
     private final EmployeeRepository employeeRepository;
     private final RoleRepository roleRepository;
     private final UserInvitationService userInvitationService;
+    private final InvitationDeliveryService invitationDeliveryService;
 
     public UserService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             EmployeeRepository employeeRepository,
             RoleRepository roleRepository,
-            UserInvitationService userInvitationService) {
+            UserInvitationService userInvitationService,
+            InvitationDeliveryService invitationDeliveryService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.employeeRepository = employeeRepository;
         this.roleRepository = roleRepository;
         this.userInvitationService = userInvitationService;
+        this.invitationDeliveryService = invitationDeliveryService;
     }
 
     @Transactional
@@ -132,6 +135,8 @@ public class UserService {
         User user = provisionEmployeeAccount(organisationId, employeeId);
 
         UserInvitationService.CreatedInvitation invitation = userInvitationService.createInvitation(organisationId, user.getId());
+
+        invitationDeliveryService.sendSetupInvitation(user, invitation.rawToken());
 
         return new ProvisionedEmployeeAccount(user, invitation);
     }
